@@ -1,0 +1,17 @@
+{
+  "status_macro_f1": 0.7920325581599712,
+  "status_weighted_f1": 0.8184492950048389,
+  "risk_threshold": 0.22,
+  "risk_recall": 0.9155998103366524,
+  "risk_precision": 0.7605356439543127,
+  "risk_auc": 0.9670361719978737,
+  "dimensions": [
+    "Normal",
+    "Depression",
+    "Suicidal",
+    "Anxiety",
+    "Bipolar",
+    "Stress",
+    "Personality Disorder"
+  ]
+}

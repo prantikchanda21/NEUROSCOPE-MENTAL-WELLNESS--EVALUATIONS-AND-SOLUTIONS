@@ -1,0 +1,4 @@
+{
+  "threshold": 0.22,
+  "note": "Recall-first threshold tuned on validation; maps to NeuroScope risk levels"
+}

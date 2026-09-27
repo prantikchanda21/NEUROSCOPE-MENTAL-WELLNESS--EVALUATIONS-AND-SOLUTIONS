@@ -1,0 +1,29 @@
+{
+  "dimensions": [
+    "Normal",
+    "Depression",
+    "Suicidal",
+    "Anxiety",
+    "Bipolar",
+    "Stress",
+    "Personality Disorder"
+  ],
+  "label2id": {
+    "Normal": 0,
+    "Depression": 1,
+    "Suicidal": 2,
+    "Anxiety": 3,
+    "Bipolar": 4,
+    "Stress": 5,
+    "Personality Disorder": 6
+  },
+  "id2label": {
+    "0": "Normal",
+    "1": "Depression",
+    "2": "Suicidal",
+    "3": "Anxiety",
+    "4": "Bipolar",
+    "5": "Stress",
+    "6": "Personality Disorder"
+  }
+}

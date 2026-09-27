@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/* Use the San Francisco system font (Apple's system UI font) across the
+   whole site, with sensible fallbacks for non-Apple platforms. This only
+   sets font-family — it does not touch layout, color, spacing, or any
+   other Tailwind utility already applied to elements. */
+html {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Crisper glyph edges — the animated landscape GIFs behind the UI are busier
+     than a flat color, so text needs every bit of rendering sharpness it can get. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Bolder body copy site-wide, plus a tight, soft drop shadow on every piece
+   of text. This is the main fix for legibility over the new animated
+   landscape backgrounds: a heavier weight gives glyphs more ink, and the
+   shadow gives them a dark halo so they read clearly whether they're sitting
+   over bright sky, dark night, or anything in between. This sets the
+   *baseline* only (element-selector specificity), so any element with an
+   explicit Tailwind weight utility (font-medium, font-semibold, font-bold,
+   etc.) still wins on weight — the shadow still applies underneath it. */
+body {
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 1px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* Headings get an extra-bold baseline and a slightly stronger shadow so
+   titles stay crisp and punchy even directly over the brightest sky or
+   cloud regions of the day footage. */
+h1, h2, h3 {
+  font-weight: 900;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Site-wide bolder type: every Tailwind weight utility gets nudged up a
+   notch so all copy — labels, captions, buttons, everything — reads bolder,
+   not just the body/heading baseline above. Kept as a step-up from each
+   utility's own weight (rather than one flat value) so intentional weight
+   *relationships* between elements (e.g. a bold title vs. a semibold badge)
+   are preserved, just shifted heavier across the board.
+   Bumped one notch darker/inkier than before (700→800, 800→900) for extra
+   legibility, still stopping at 900 so nothing goes beyond the font's
+   heaviest available weight. */
+.font-thin, .font-extralight, .font-light, .font-normal { font-weight: 700 !important; }
+.font-medium { font-weight: 800 !important; }
+.font-semibold { font-weight: 900 !important; }
+.font-bold { font-weight: 900 !important; }
+.font-extrabold, .font-black { font-weight: 900 !important; }
+
+/* Glass panels already carry their own strong dark backdrop, so the extra
+   text-shadow there is redundant and just softens edges — turn it off
+   inside them for the sharpest possible rendering where contrast is already
+   solved by the panel itself. */
+.glass-panel {
+  text-shadow: none;
+}
+.glass-panel h1,
+.glass-panel h2,
+.glass-panel h3 {
+  text-shadow: none;
+}
+
+/* macOS-style translucent "glass" window treatment for the main dashboard
+   panels. Applied on top of each panel's existing Tailwind classes — this
+   only overrides `background` and `backdrop-filter`, so every panel keeps
+   its own accent border color, shadow tint, radius and layout untouched. */
+.glass-panel {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0.05) 100%),
+    rgba(2, 6, 23, 0.4);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+/* Day mode only: the sunlit/pastel landscape behind the UI is much brighter
+   than the night footage, so the same glass tint that reads fine at night
+   washes out against it and makes light text hard to read. In day mode we
+   deepen the panel's dark backdrop (without touching night mode at all) so
+   every glass surface keeps strong contrast under bright daylight footage.
+   Only `background`/`backdrop-filter` are overridden here too, so layout,
+   borders, radius and shadows on each panel stay exactly as before. */
+[data-landscape-mode="day"] .glass-panel {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 45%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(2, 6, 23, 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Night mode dashboard: a deeper, moodier glass theme than the base
+   .glass-panel default. The night landscape footage already carries a lot
+   of its own contrast (moonlight, stars, deep shadow), so panels get a
+   noticeably darker, less saturated tint than day mode — closer to true
+   black glass — to keep the dashboard feeling calm at night while text on
+   top stays sharp. Only `background`/`backdrop-filter` are touched, so
+   every panel's border, radius, shadow and layout are untouched. */
+[data-landscape-mode="night"] .glass-panel {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01) 45%, rgba(255, 255, 255, 0.02) 100%),
+    rgba(1, 4, 16, 0.82);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+/* High-vibrancy neural aurora ambient lighting & modern cyber-neuro grid */
+.bg-neuro-grid {
+  background-size: 48px 48px;
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+}
+
+/* Neural glow perspective floor */
+.bg-grid-fade-mask {
+  mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 60%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 60%, transparent 95%);
+}
+
+/* Subtle breathing aurora animation */
+@keyframes auroraDrift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(30px, -20px) scale(1.08);
+    opacity: 0.65;
+  }
+}
+
+.animate-aurora-slow {
+  animation: auroraDrift 16s ease-in-out infinite;
+}
+
+/* Soft mountain breeze drift for floating pollen & leaves */
+@keyframes gentleBreezeFloat {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(45px, 25px) rotate(18deg);
+  }
+  100% {
+    transform: translate(-20px, 60px) rotate(-12deg);
+  }
+}
+
+.animate-breeze {
+  animation: gentleBreezeFloat 18s ease-in-out infinite alternate;
+}
+
+/* Individual star twinkle — randomized delay/duration per star gives a living
+   night sky instead of a static field of dots. */
+@keyframes starTwinkle {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.animate-star-twinkle {
+  animation-name: starTwinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+/* ---------------------------------------------------------------------
+   Buttery-smooth polish. Purely additive: nothing here removes or
+   overrides a property another rule/utility already sets, so existing
+   layout, colors, durations and transition *properties* are untouched —
+   this only smooths out *how* motion already happening on the page eases
+   and renders.
+   --------------------------------------------------------------------- */
+
+/* Native smooth scrolling for anchor jumps / programmatic scrollTo calls. */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Every element that already has a Tailwind `transition-*` utility (colors,
+   opacity, transform, etc.) picks up a consistent, buttery ease-out curve
+   instead of the browser default `ease`. This only sets the *timing
+   function* — duration, delay and which properties transition are left
+   entirely to whatever each element already specifies, so no existing
+   animation is sped up, slowed down, or disabled. */
+*, *::before, *::after {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hint the browser to optimize the blurred glass panels and the animated
+   landscape video for compositing, cutting down on scroll/animation jank
+   from the constant backdrop-filter blur without altering their box model,
+   stacking, or positioning (no transform is applied — only a render hint). */
+.glass-panel,
+.bg-neuro-grid {
+  will-change: backdrop-filter;
+}
+
+/* Respect users who've asked for reduced motion: keep the site functional
+   and legible, just calmer. Scoped to the ambient/decorative animations
+   above only — nothing interactive or content-bearing is affected. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-aurora-slow,
+  .animate-breeze,
+  .animate-star-twinkle {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
