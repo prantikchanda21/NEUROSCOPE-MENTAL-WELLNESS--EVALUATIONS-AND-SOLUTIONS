@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AnswerRecord, DimensionInsight, DimensionScore, NeuroScopeReading, RiskAssessment } from '../types';
 import type { RetrievedPassage } from '../utils/researchKnowledge';
+import type { WellnessProfile } from '../utils/wellnessProfileStorage';
 import {
   answersForCategory,
   buildLocalDimensionInsight,
@@ -33,6 +34,7 @@ interface DimensionInsightDropdownProps {
   researchPassages?: RetrievedPassage[];
   /** Every PRIMARY NeuroScope DistilBERT reading from this run (optional). */
   neuroscopeReadings?: NeuroScopeReading[];
+  wellnessProfile?: WellnessProfile | null;
   /** Changes whenever the report is regenerated, so stale briefs are dropped. */
   cacheKey: string;
 }
@@ -58,6 +60,7 @@ export const DimensionInsightDropdown: React.FC<DimensionInsightDropdownProps> =
   riskAssessment,
   researchPassages,
   neuroscopeReadings,
+  wellnessProfile,
   cacheKey,
 }) => {
   const [open, setOpen] = useState(false);
@@ -114,6 +117,7 @@ export const DimensionInsightDropdown: React.FC<DimensionInsightDropdownProps> =
           researchPassages: passages,
           neuroscopeReadings:
             neuroscopeReadings && neuroscopeReadings.length ? neuroscopeReadings : undefined,
+          wellnessProfile: wellnessProfile?.useForPersonalization === false ? undefined : wellnessProfile ?? undefined,
         }),
       });
       if (res.ok) {
@@ -145,6 +149,7 @@ export const DimensionInsightDropdown: React.FC<DimensionInsightDropdownProps> =
     riskAssessment,
     researchPassages,
     neuroscopeReadings,
+    wellnessProfile,
   ]);
 
   const toggle = () => {

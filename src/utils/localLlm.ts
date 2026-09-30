@@ -139,7 +139,7 @@ async function detectSupport(): Promise<{ ok: boolean; reason?: string }> {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') return { ok: false, reason: 'This browser cannot run background workers.' };
   if (!window.isSecureContext) return { ok: false, reason: 'Offline AI needs a secure (https) page.' };
   const nav = navigator as any;
-  if (!nav.gpu) return { ok: false, reason: 'Needs a browser with WebGPU (recent Chrome or Edge on desktop).' };
+  if (!nav.gpu) return { ok: false, reason: 'Needs a browser with WebGPU (recent Chrome/Edge or another compatible Chromium browser).' };
   try {
     const adapter = await nav.gpu.requestAdapter();
     if (!adapter) return { ok: false, reason: 'No usable graphics adapter was found for WebGPU.' };
@@ -371,6 +371,7 @@ export interface LocalChatContext {
   solutionTitle?: string;
   emotionalStateLabel?: string;
   history?: { role: 'user' | 'assistant'; content: string }[];
+  wellnessProfileContext?: string;
 }
 
 const LOCAL_CHAT_SYSTEM = `You are a warm, grounded wellbeing companion inside a mental-health check-in app. You are NOT a therapist and never diagnose. Reply to the person's latest message directly and specifically: refer to what they actually said, in their own words where natural. Write 2 to 4 short sentences (under 90 words) of plain conversational text: no lists, no markdown, no headings, no emojis. Include exactly one small, concrete thing they could try in the next few minutes. Never give medication or dosage advice. Never claim to replace a professional. If they mention hurting themselves or not wanting to be alive, tell them kindly to contact local emergency services or a crisis line right now and to reach out to someone they trust.`;
@@ -409,6 +410,7 @@ export async function generateLocalChatReply(
     ctx.userAnswer ? `What they answered: ${clip(ctx.userAnswer, 400)}` : '',
     ctx.emotionalStateLabel ? `Reading of their state: ${clip(ctx.emotionalStateLabel, 80)}` : '',
     ctx.solutionTitle ? `Suggestion they were shown: ${clip(ctx.solutionTitle, 120)}` : '',
+    ctx.wellnessProfileContext ? ctx.wellnessProfileContext : '',
     turns ? `Recent conversation:\n${turns}` : '',
     `Person's latest message: ${q}`,
     'Your reply:',
@@ -435,6 +437,7 @@ export interface LocalSolutionInput {
   userAnswer: string;
   toneLabel?: string;
   dominantEmotion?: string;
+  wellnessProfileContext?: string;
 }
 
 export interface LocalSolutionDraft {
@@ -497,6 +500,7 @@ export async function generateLocalSolution(
     `Their answer: "${answer}"`,
     input.toneLabel ? `Overall tone reading: ${input.toneLabel}` : '',
     input.dominantEmotion ? `Strongest emotion detected: ${input.dominantEmotion}` : '',
+    input.wellnessProfileContext ? input.wellnessProfileContext : '',
     'Now write the labelled lines.',
   ]
     .filter(Boolean)

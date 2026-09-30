@@ -6,6 +6,9 @@ import { generateLocalChatReply, getLocalLlmState, waitForLocalLlm } from '../ut
 import { hasImminentRiskLanguage } from '../utils/riskEngine';
 import { SemanticAnalysis } from '../types';
 import { RetrievedPassage } from '../utils/researchKnowledge';
+import type { ExportChatMessage } from '../utils/chatExport';
+import type { WellnessProfile } from '../utils/wellnessProfileStorage';
+import { buildWellnessProfileContext } from '../utils/wellnessProfileStorage';
 import { HelixWaveEffect } from './HelixWaveEffect';
 import {
   Sparkles,
@@ -55,6 +58,10 @@ interface DynamicSolutionCardProps {
   /** Research passages retrieved for this answer, forwarded to the follow-up
    * chat so replies stay grounded in the same sources as the solution. */
   researchPassages?: RetrievedPassage[];
+  /** Emits each follow-up chat turn to the parent so the complete assessment
+   * conversation can be exported after the final synthesis. */
+  onChatMessage?: (message: ExportChatMessage) => void;
+  wellnessProfile?: WellnessProfile | null;
 }
 
 
@@ -75,6 +82,8 @@ export const DynamicSolutionCard: React.FC<DynamicSolutionCardProps> = ({
   isContinuing = false,
   semanticProfile,
   researchPassages,
+  onChatMessage,
+  wellnessProfile,
 }) => {
   const [breathPhase, setBreathPhase] = useState<'inhale1' | 'inhale2' | 'exhale'>('inhale1');
   const [completedMicroExercise, setCompletedMicroExercise] = useState(false);
@@ -118,6 +127,12 @@ export const DynamicSolutionCard: React.FC<DynamicSolutionCardProps> = ({
     };
 
     setFollowUpMessages((prev) => [...prev, userMsg]);
+    onChatMessage?.({
+      role: 'user',
+      content: query,
+      questionNumber,
+      questionText,
+    });
     setFollowUpInput('');
     setIsFollowUpLoading(true);
 
@@ -175,6 +190,7 @@ export const DynamicSolutionCard: React.FC<DynamicSolutionCardProps> = ({
               semanticProfile: semanticProfile ?? undefined,
               researchPassages: researchPassages?.length ? researchPassages : undefined,
               riskAssessment: solution.riskLevel ? { level: solution.riskLevel } : undefined,
+              wellnessProfile: wellnessProfile?.useForPersonalization === false ? undefined : wellnessProfile ?? undefined,
             }),
           });
           clearTimeout(timeoutId);
@@ -198,6 +214,7 @@ export const DynamicSolutionCard: React.FC<DynamicSolutionCardProps> = ({
               solutionTitle: solution.immediateSolutionTitle,
               emotionalStateLabel: solution.emotionalStateLabel,
               history: followUpMessages.slice(-4).map((m) => ({ role: m.role, content: m.content })),
+              wellnessProfileContext: buildWellnessProfileContext(wellnessProfile),
             })
           : null;
         if (onDevice) {
@@ -218,10 +235,18 @@ export const DynamicSolutionCard: React.FC<DynamicSolutionCardProps> = ({
       suggestedAction = local.suggestedAction;
     }
 
+    const assistantMsg: ExportChatMessage = {
+      role: 'assistant',
+      content: replyText,
+      suggestedAction,
+      questionNumber,
+      questionText,
+    };
     setFollowUpMessages((prev) => [
       ...prev,
       { id: `ai-${Date.now()}`, role: 'assistant', content: replyText, suggestedAction },
     ]);
+    onChatMessage?.(assistantMsg);
     setIsFollowUpLoading(false);
   };
 

@@ -120,7 +120,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           Research-grounded • AI-powered • Private
         </div>
 
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-white via-emerald-100 to-amber-300 bg-clip-text text-transparent mb-4">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-black mb-4">
           Understand your mind,
           <br className="hidden sm:block" /> one honest answer at a time
         </h1>

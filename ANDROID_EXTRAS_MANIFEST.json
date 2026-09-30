@@ -1,0 +1,34 @@
+{
+  "base_repo": "neuroscope-github.zip",
+  "source_repo": "NeuroScope_GitHub_Ready_Android_Native_Auth_Speech_Full.zip",
+  "included_files": [
+    ".env.example",
+    "capacitor.config.ts",
+    "index.html",
+    "package.json",
+    "public/manifest.webmanifest",
+    "server-app.ts",
+    "src/App.tsx",
+    "src/components/AssessmentResultsView.tsx",
+    "src/components/ClinicalSummaryReportModal.tsx",
+    "src/components/DimensionInsightDropdown.tsx",
+    "src/components/DynamicSolutionCard.tsx",
+    "src/components/HeaderNav.tsx",
+    "src/components/InstallAppPrompt.tsx",
+    "src/components/LandingPage.tsx",
+    "src/components/LoginPage.tsx",
+    "src/components/OfflineModelMenu.tsx",
+    "src/components/QuestionCard.tsx",
+    "src/components/WellnessProfileCard.tsx",
+    "src/index.css",
+    "src/main.tsx",
+    "src/utils/chatExport.ts",
+    "src/utils/dynamicFeelingSolutions.ts",
+    "src/utils/googleAuth.ts",
+    "src/utils/localLlm.ts",
+    "src/utils/wellnessProfileStorage.ts"
+  ],
+  "removed_from_latest_not_included": [
+    "package-lock.json"
+  ]
+}

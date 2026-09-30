@@ -14,6 +14,8 @@ import {
 import { generateLocalSolution, isLocalLlmReady, type LocalSolutionDraft } from './localLlm';
 import { hasImminentRiskLanguage } from './riskEngine';
 import { summarizeSources } from './researchRetrieval';
+import type { WellnessProfile } from './wellnessProfileStorage';
+import { buildWellnessProfileContext } from './wellnessProfileStorage';
 
 /**
  * Everything the local/remote engines learned about the current answer before
@@ -32,6 +34,7 @@ export interface SolutionEvidence {
   /** Every PRIMARY NeuroScope reading from this run so far — sent to the
    * server so Gemini/Groq write from the full trained-model picture. */
   neuroscopeReadings?: import('../types').NeuroScopeReading[] | null;
+  wellnessProfile?: WellnessProfile | null;
 }
 
 /** Fields that surface the evidence itself in the card: the emotion chips, the
@@ -215,6 +218,7 @@ export async function fetchDynamicFeelingSolution(
               : undefined,
         researchPassages: evidence?.passages ?? undefined,
         psycheExamples: evidence?.psycheExamples ?? undefined,
+        wellnessProfile: evidence?.wellnessProfile?.useForPersonalization === false ? undefined : evidence?.wellnessProfile ?? undefined,
       }),
     });
 
@@ -307,6 +311,7 @@ async function personalizeOnDevice(
       toneLabel: base.toneLevel ?? evidence?.tone?.label,
       dominantEmotion:
         evidence?.semantics?.emotions?.source === 'transformer' ? evidence.semantics.emotions.top?.label : undefined,
+      wellnessProfileContext: buildWellnessProfileContext(evidence?.wellnessProfile),
     });
   } catch {
     draft = null;
@@ -344,7 +349,20 @@ export function generateDynamicFeelingSolution(
   evidence?: SolutionEvidence | null
 ): DynamicFeelingSolution {
   const solution = buildDynamicFeelingSolution(question, userAnswer, questionNumber, evidence);
-  return { ...solution, ...evidenceFields(evidence) };
+  const profile = evidence?.wellnessProfile;
+  let practicalStepToday = solution.practicalStepToday;
+  if (profile && profile.useForPersonalization !== false) {
+    const additions: string[] = [];
+    if (profile.sleepHours !== undefined && profile.sleepHours < 6) {
+      additions.push(`You reported about ${profile.sleepHours} hours of sleep, so make recovery a priority today and protect a calmer wind-down tonight.`);
+    } else if (profile.caffeineCups !== undefined && profile.caffeineCups >= 4) {
+      additions.push(`You reported ${profile.caffeineCups} cups of caffeine today; consider keeping the next dose earlier so it does not work against tonight's sleep.`);
+    } else if (profile.exerciseFrequency === 'rarely') {
+      additions.push('Because your current movement routine is light, a gentle 5–10 minute walk can be an easy starting point rather than a big workout.');
+    }
+    if (additions.length) practicalStepToday = `${practicalStepToday || 'Choose one small supportive step for today.'} ${additions[0]}`;
+  }
+  return { ...solution, ...(practicalStepToday ? { practicalStepToday } : {}), ...evidenceFields(evidence) };
 }
 
 function buildDynamicFeelingSolution(

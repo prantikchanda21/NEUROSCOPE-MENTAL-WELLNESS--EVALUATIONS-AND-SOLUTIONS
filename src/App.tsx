@@ -64,6 +64,10 @@ import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
 import { getCurrentUser, getLoginStreak, recordDailyLogin, signOut, PublicUser } from './utils/authStorage';
 import { Brain, ShieldCheck, ArrowRight, Rotate3d } from 'lucide-react';
+import { InstallAppPrompt } from './components/InstallAppPrompt';
+import { WellnessProfileCard } from './components/WellnessProfileCard';
+import { getWellnessProfile, saveWellnessProfile, WellnessProfile } from './utils/wellnessProfileStorage';
+import { downloadFullAssessmentChat, ExportChatMessage } from './utils/chatExport';
 
 export default function App() {
   // Lifted here (rather than kept local to RealisticGreeneryLandscape) so the
@@ -75,6 +79,11 @@ export default function App() {
   // anyone who isn't authenticated yet. Once they click through (or once
   // they're signed in) this stays out of the way for the rest of the visit.
   const [showAuthPage, setShowAuthPage] = useState<boolean>(false);
+  const [showWellnessProfile, setShowWellnessProfile] = useState<boolean>(() => !!getCurrentUser());
+  const [wellnessProfile, setWellnessProfile] = useState<WellnessProfile | null>(() => {
+    const user = getCurrentUser();
+    return user ? getWellnessProfile(user.id) : null;
+  });
   const [loginStreak, setLoginStreak] = useState<number>(() => {
     const user = getCurrentUser();
     return user ? getLoginStreak(user.id).currentStreak : 0;
@@ -100,6 +109,10 @@ export default function App() {
   // answer indicates active self-harm/suicidal risk, instead of waiting
   // until the final report to surface crisis resources.
   const [showImmediateCrisis, setShowImmediateCrisis] = useState<boolean>(false);
+  // Complete run transcript. Dynamic follow-up chat messages are emitted by
+  // each solution card so the final export can contain every turn, even though
+  // each card owns its own short-lived chat UI state.
+  const [chatTranscript, setChatTranscript] = useState<ExportChatMessage[]>([]);
 
   // --- Dynamic risk tracking + semantic evidence ---------------------------
   // The rolling risk tracker is the app's replacement for the old fixed
@@ -199,6 +212,19 @@ export default function App() {
     }
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    if (!currentUser) {
+      setShowWellnessProfile(false);
+      setWellnessProfile(null);
+      return;
+    }
+
+    // Show the profile step after sign-in on each fresh session. Existing values
+    // are prefilled, while Skip keeps the assessment available with no profile.
+    setWellnessProfile(getWellnessProfile(currentUser.id));
+    if (!hasStarted && !assessmentResult) setShowWellnessProfile(true);
+  }, [currentUser?.id]);
+
   // Loads the models and then pre-computes the vectors that every answer is compared
   // against (the question pool for adaptive selection, the research corpus for
   // grounding) — once, in the background, instead of during the first submit.
@@ -273,7 +299,7 @@ export default function App() {
         userAnswer,
         currentIndex + 1,
         assessmentLength,
-        evidence,
+        { ...(evidence || {}), wellnessProfile },
         // Personalised text from the on-device model arrives later; apply it only if the
         // person is still looking at the card for this same question.
         (upgraded) =>
@@ -586,6 +612,7 @@ export default function App() {
         },
         body: JSON.stringify({
           answers: formattedAnswers,
+          wellnessProfile: wellnessProfile?.useForPersonalization === false ? undefined : wellnessProfile ?? undefined,
           preferredProvider: 'auto',
           riskAssessment: evidenceRef.current.risk ?? undefined,
           semanticProfile: evidenceRef.current.semantics ?? undefined,
@@ -683,6 +710,7 @@ export default function App() {
           answers: formattedAnswers,
           customFeedback: customPrompt,
           previousVerdict: assessmentResult?.overallVerdict,
+          wellnessProfile: wellnessProfile?.useForPersonalization === false ? undefined : wellnessProfile ?? undefined,
           riskAssessment: evidenceRef.current.risk ?? undefined,
           semanticProfile: evidenceRef.current.semantics ?? undefined,
           neuroscopeReadings: evidenceRef.current.neuroscopeReadings.length
@@ -717,11 +745,43 @@ export default function App() {
     }
   };
 
+  const handleChatMessage = (message: ExportChatMessage) => {
+    setChatTranscript((prev) => [...prev, message]);
+  };
+
+  const handleWellnessProfileSave = (profile: Omit<WellnessProfile, 'updatedAt'>) => {
+    if (!currentUser) return;
+    const saved = saveWellnessProfile(profile, currentUser.id);
+    setWellnessProfile(saved);
+    setShowWellnessProfile(false);
+  };
+
+  const handleWellnessProfileSkip = () => {
+    setShowWellnessProfile(false);
+  };
+
+  const getFormattedAnswers = (): AnswerRecord[] => sequence.map((q) => ({
+    questionId: q.id,
+    category: q.category,
+    questionText: q.question,
+    answer: answers[q.id] || 'Not answered',
+  }));
+
+  const handleDownloadFullChat = () => {
+    if (!assessmentResult) return;
+    downloadFullAssessmentChat({
+      userName: currentUser?.name,
+      profile: wellnessProfile,
+      answers: getFormattedAnswers(),
+      messages: chatTranscript,
+      result: assessmentResult,
+    });
+  };
+
   const handleAuthenticated = (user: PublicUser) => {
     setCurrentUser(user);
-    // The daily-login-streak effect above (keyed on currentUser.id) picks
-    // this up automatically once currentUser updates, so the streak stays
-    // in sync here too without recording the login twice.
+    setWellnessProfile(getWellnessProfile(user.id));
+    setShowWellnessProfile(true);
   };
 
   const handleSignOut = () => {
@@ -739,6 +799,9 @@ export default function App() {
     setActiveDynamicSolution(null);
     setShowImmediateCrisis(false);
     setAssessmentLength(DEFAULT_ASSESSMENT_LENGTH);
+    setChatTranscript([]);
+    setShowWellnessProfile(false);
+    setWellnessProfile(null);
     resetRiskState();
   };
 
@@ -751,6 +814,7 @@ export default function App() {
     setHasStarted(false);
     setActiveDynamicSolution(null);
     setShowImmediateCrisis(false);
+    setChatTranscript([]);
     resetRiskState();
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -759,10 +823,10 @@ export default function App() {
 
   return (
     <div
-      className="relative min-h-screen flex flex-col font-sans text-slate-100 overflow-x-hidden"
+      className="neuroscope-app relative min-h-screen flex flex-col font-sans text-slate-900 overflow-x-hidden"
       data-landscape-mode={isMoonlightMode ? 'night' : 'day'}
     >
-      {/* Photorealistic Greenery Landscape with Continuous Shining Sun & Volumetric God Rays */}
+      {/* Retained for feature compatibility; hidden by the mobile white theme. */}
       <RealisticGreeneryLandscape
         isMoonlightMode={isMoonlightMode}
         onModeChange={setIsMoonlightMode}
@@ -783,8 +847,16 @@ export default function App() {
           </div>
         ) : (
         <AnimatePresence mode="wait">
+          {!assessmentResult && showWellnessProfile && (
+            <WellnessProfileCard
+              initialProfile={wellnessProfile}
+              onSave={handleWellnessProfileSave}
+              onSkip={handleWellnessProfileSkip}
+            />
+          )}
+
           {/* Active Screening or Welcome View: Immersive 2-Column Desktop View with Brain Tree filling right side */}
-          {!assessmentResult && (
+          {!assessmentResult && !showWellnessProfile && (
             <div className="w-full max-w-[900px] mx-auto flex items-center min-h-[calc(100vh-140px)]">
               {/* Interactive Cards */}
               <div className="w-full flex flex-col justify-center">
@@ -865,7 +937,11 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="pt-2">
+                      <div className="pt-1">
+                      <InstallAppPrompt />
+                    </div>
+
+                    <div className="pt-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -941,6 +1017,8 @@ export default function App() {
                         isContinuing={isThinking}
                         semanticProfile={lastSemantics}
                         researchPassages={lastPassages}
+                        wellnessProfile={wellnessProfile}
+                        onChatMessage={handleChatMessage}
                       />
                     ) : (
                       <QuestionCard
@@ -1030,6 +1108,8 @@ export default function App() {
                       ? evidenceRef.current.neuroscopeReadings
                       : undefined
                   }
+                  wellnessProfile={wellnessProfile}
+                  onDownloadChat={handleDownloadFullChat}
                 />
               </Suspense>
             </motion.div>

@@ -91,7 +91,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onAuthenticated }) => {
             alt="NeuroScope logo"
             className="w-14 h-14 object-contain drop-shadow-[0_0_14px_rgba(45,212,191,0.6)]"
           />
-          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-emerald-100 to-amber-300 bg-clip-text text-transparent">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-black">
             {mode === 'signin' ? 'Welcome Back' : 'Create Your Account'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 max-w-[320px]">

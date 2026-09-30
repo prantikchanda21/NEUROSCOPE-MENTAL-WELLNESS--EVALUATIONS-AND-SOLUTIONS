@@ -65,7 +65,7 @@ export const OfflineModelMenu: React.FC = () => {
         aria-expanded={open}
         aria-label="Offline AI model"
         title="Offline AI model"
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 hover:border-emerald-400/50 text-slate-300 hover:text-emerald-200 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-2 text-slate-600 shadow-sm transition-colors hover:border-emerald-300 hover:text-emerald-700 cursor-pointer"
       >
         <HardDriveDownload className="w-3.5 h-3.5" />
         <span className="hidden md:inline text-[11px] font-semibold">Offline AI</span>
@@ -77,20 +77,20 @@ export const OfflineModelMenu: React.FC = () => {
         <div
           role="dialog"
           aria-label="Offline AI model"
-          className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] z-50 rounded-2xl border border-emerald-500/25 bg-slate-950/95 backdrop-blur-xl shadow-2xl shadow-black/40 p-4 text-left"
+          className="absolute right-0 mt-2 w-[min(21rem,calc(100vw-1.5rem))] z-50 rounded-3xl border border-slate-200 bg-white/98 backdrop-blur-xl shadow-2xl shadow-slate-900/10 p-4 text-left"
         >
           <div className="flex items-start gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-300 mt-0.5 shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
             <div>
-              <p className="text-[13px] font-bold text-white">{LOCAL_LLM_LABEL} — works offline</p>
-              <p className="text-[11px] leading-relaxed text-slate-400 mt-1">
+              <p className="text-[13px] font-extrabold text-slate-900">{LOCAL_LLM_LABEL} — works offline</p>
+              <p className="text-[11px] leading-relaxed text-slate-500 mt-1">
                 Download once and a small language model runs on your own device. It helps read the tone of your
                 answers when the online AI can&apos;t be reached. What you type is not sent anywhere for it.
               </p>
             </div>
           </div>
 
-          <div className="mt-3 rounded-xl bg-slate-900/70 border border-slate-800 p-3 text-[11px] leading-relaxed text-slate-300">
+          <div className="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 text-[11px] leading-relaxed text-slate-600">
             NeuroScope and RoBERTa still make the safety decisions. This model can only add a supporting reading, and
             it can never lower a high-risk result.
           </div>
@@ -104,7 +104,7 @@ export const OfflineModelMenu: React.FC = () => {
             )}
 
             {s.status === 'unsupported' && (
-              <p className="flex items-start gap-2 text-[11px] text-amber-200/90">
+              <p className="flex items-start gap-2 text-[11px] text-amber-700">
                 <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span>Not available on this device. {s.message}</span>
               </p>
@@ -115,21 +115,21 @@ export const OfflineModelMenu: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void downloadLocalLlm()}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-100 text-[12px] font-semibold transition-colors cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-800 text-[12px] font-semibold transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Download (about {gb(LOCAL_LLM_APPROX_BYTES)} GB)
                 </button>
                 <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                  Best on Wi-Fi. Needs a recent Chrome or Edge on a computer with a graphics chip, and roughly 3 GB of
-                  free space. You can remove it any time.
+                  Best on Wi-Fi. Needs a recent browser with WebGPU and enough free storage/memory. Some phones may not support the
+                  local model yet. You can remove it any time. You can remove it any time.
                 </p>
               </>
             )}
 
             {s.status === 'downloading' && (
               <div>
-                <div className="flex justify-between text-[11px] text-slate-300 mb-1.5">
+                <div className="flex justify-between text-[11px] text-slate-600 mb-1.5">
                   <span>Downloading…</span>
                   <span className="font-mono">
                     {pct}% · {gb(s.loadedBytes)} / {gb(LOCAL_LLM_APPROX_BYTES)} GB
@@ -149,27 +149,27 @@ export const OfflineModelMenu: React.FC = () => {
             )}
 
             {s.status === 'loading' && (
-              <p className="flex items-center gap-2 text-[11px] text-slate-300">
+              <p className="flex items-center gap-2 text-[11px] text-slate-600">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading from this device…
               </p>
             )}
 
             {s.status === 'ready' && (
-              <p className="flex items-center gap-2 text-[11px] text-emerald-300 font-semibold">
+              <p className="flex items-center gap-2 text-[11px] text-emerald-700 font-semibold">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" /> Ready — works without internet
               </p>
             )}
 
             {s.status === 'error' && (
               <div>
-                <p className="flex items-start gap-2 text-[11px] text-rose-200">
+                <p className="flex items-start gap-2 text-[11px] text-rose-700">
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span>{s.message || 'Something went wrong.'}</span>
                 </p>
                 <button
                   type="button"
                   onClick={() => void downloadLocalLlm()}
-                  className="mt-2 w-full px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-[12px] font-semibold cursor-pointer"
+                  className="mt-2 w-full px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   Try again
                 </button>
@@ -178,7 +178,7 @@ export const OfflineModelMenu: React.FC = () => {
           </div>
 
           {(s.installed || s.status === 'ready' || s.status === 'error') && !busy && (
-            <div className="mt-3 pt-3 border-t border-slate-800">
+            <div className="mt-3 pt-3 border-t border-slate-200">
               {!confirmRemove ? (
                 <button
                   type="button"
@@ -189,14 +189,14 @@ export const OfflineModelMenu: React.FC = () => {
                 </button>
               ) : (
                 <div className="flex items-center gap-2 text-[11px]">
-                  <span className="text-slate-300">Remove and free the space?</span>
+                  <span className="text-slate-600">Remove and free the space?</span>
                   <button
                     type="button"
                     onClick={() => {
                       void removeLocalLlm();
                       setConfirmRemove(false);
                     }}
-                    className="px-2 py-1 rounded-lg bg-rose-500/20 border border-rose-400/40 text-rose-200 font-semibold cursor-pointer"
+                    className="px-2 py-1 rounded-lg bg-rose-500/20 border border-rose-400/40 text-rose-700 font-semibold cursor-pointer"
                   >
                     Remove
                   </button>

@@ -54,6 +54,26 @@ import { retrievePsycheCandidates, PsycheExample } from './src/utils/psycheDatas
 
 const app = express();
 
+// Mobile builds are served from Capacitor's local origin rather than the
+// Vercel website origin. Allow those API calls while keeping credentials
+// disabled (the app uses server-side API keys, not browser cookies).
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowed = !origin || [
+    'https://neuroscope-mental-wellness.vercel.app',
+    'capacitor://localhost',
+    'http://localhost',
+    'https://localhost',
+  ].includes(origin);
+
+  if (allowed && origin) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 
 // Lazy initializer for Gemini client to comply with guidelines
@@ -1137,6 +1157,54 @@ function applyPrimarySeverityFloor<T extends Record<string, any>>(parsed: T, bod
 }
 
 /** Turns the client's transformer/risk readings into a prompt block. */
+function sanitizeWellnessProfile(input: any): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object' || input.useForPersonalization === false) return undefined;
+  const out: Record<string, unknown> = {};
+  const age = finite(input.age);
+  const heightCm = finite(input.heightCm);
+  const weightKg = finite(input.weightKg);
+  const sleepHours = finite(input.sleepHours);
+  const caffeineCups = finite(input.caffeineCups);
+  if (age !== null && age >= 13 && age <= 120) out.age = Math.round(age);
+  if (heightCm !== null && heightCm >= 80 && heightCm <= 250) out.heightCm = Number(heightCm.toFixed(1));
+  if (weightKg !== null && weightKg >= 20 && weightKg <= 350) out.weightKg = Number(weightKg.toFixed(1));
+  if (sleepHours !== null && sleepHours >= 0 && sleepHours <= 24) out.sleepHours = Number(sleepHours.toFixed(1));
+  if (caffeineCups !== null && caffeineCups >= 0 && caffeineCups <= 30) out.caffeineCups = Number(caffeineCups.toFixed(1));
+  const exercise = typeof input.exerciseFrequency === 'string' ? input.exerciseFrequency : '';
+  if (['rarely', '1-2x', '3-4x', '5+x'].includes(exercise)) out.exerciseFrequency = exercise;
+  const tobacco = typeof input.tobacco === 'string' ? input.tobacco : '';
+  if (['never', 'sometimes', 'daily'].includes(tobacco)) out.tobacco = tobacco;
+  const alcohol = typeof input.alcohol === 'string' ? input.alcohol : '';
+  if (['never', 'sometimes', 'often'].includes(alcohol)) out.alcohol = alcohol;
+  if (typeof input.medications === 'string' && input.medications.trim()) out.medications = input.medications.trim().slice(0, 400);
+  if (typeof input.physicalNotes === 'string' && input.physicalNotes.trim()) out.physicalNotes = input.physicalNotes.trim().slice(0, 600);
+  return Object.keys(out).length ? out : undefined;
+}
+
+function buildWellnessProfileBlock(input: any): string {
+  const profile = sanitizeWellnessProfile(input);
+  if (!profile) return '';
+  const lines = ['USER-PROVIDED WELLNESS CONTEXT (communication-layer personalization only):'];
+  if (profile.age !== undefined) lines.push(`- Age: ${profile.age} years.`);
+  if (profile.heightCm !== undefined) lines.push(`- Height: ${profile.heightCm} cm.`);
+  if (profile.weightKg !== undefined) lines.push(`- Weight: ${profile.weightKg} kg.`);
+  if (profile.heightCm !== undefined && profile.weightKg !== undefined) {
+    const heightM = Number(profile.heightCm) / 100;
+    const bmi = Number(profile.weightKg) / (heightM * heightM);
+    if (Number.isFinite(bmi)) lines.push(`- BMI reference: ${bmi.toFixed(1)} (context only, never a mental-health score).`);
+  }
+  if (profile.sleepHours !== undefined) lines.push(`- Average sleep: ${profile.sleepHours} hours/night.`);
+  if (profile.exerciseFrequency !== undefined) lines.push(`- Exercise/movement: ${profile.exerciseFrequency}.`);
+  if (profile.caffeineCups !== undefined) lines.push(`- Caffeine: ${profile.caffeineCups} cups/day.`);
+  if (profile.tobacco !== undefined) lines.push(`- Tobacco/nicotine: ${profile.tobacco}.`);
+  if (profile.alcohol !== undefined) lines.push(`- Alcohol: ${profile.alcohol}.`);
+  if (profile.medications !== undefined) lines.push(`- User-recorded medications: ${profile.medications}`);
+  if (profile.physicalNotes !== undefined) lines.push(`- User-recorded physical notes: ${profile.physicalNotes}`);
+  lines.push('- Use these details only when they are genuinely relevant to the user’s current concern, especially sleep, energy, stress, routines, or lifestyle suggestions.');
+  lines.push('- Never diagnose from height, weight, BMI, medication names, or lifestyle alone. Never change the mental-health score because of these values. Never recommend starting/stopping/changing medication doses.');
+  return lines.join('\n');
+}
+
 function buildClientSignalBlock(body: any): { risk?: RiskAssessment; block: string } {
   const risk = sanitizeRisk(body?.riskAssessment);
   const semantic = body?.semanticProfile;
@@ -1226,7 +1294,8 @@ function buildClientSignalBlock(body: any): { risk?: RiskAssessment; block: stri
       : `ON-DEVICE MEASUREMENTS (supporting transformer readings this client's browser computed for THIS run and THIS answer — treat them as evidence about this specific person, not as generic background; when a measurement and the words themselves disagree, trust the words):\n${lines.join(
           '\n'
         )}`;
-  const block = [primaryBlock, measurementBlock].filter(Boolean).join('\n\n');
+  const wellnessBlock = buildWellnessProfileBlock(body?.wellnessProfile);
+  const block = [primaryBlock, measurementBlock, wellnessBlock].filter(Boolean).join('\n\n');
   return { risk, block };
 }
 
@@ -1938,6 +2007,7 @@ app.post('/api/solution-followup', async (req, res) => {
     req.body,
     `${questionText || ''} ${userAnswer || ''} ${userFollowUp}`
   );
+  const wellnessBlock = buildWellnessProfileBlock(req.body?.wellnessProfile);
 
   // PRIMARY classifier framing for the chat: when the client's semantic profile
   // carries a NeuroScope reading, the reply must stay consistent with it.
@@ -1960,6 +2030,7 @@ HOW TO REPLY
 - Warm, natural, conversational: 2-4 short paragraphs (about 80-180 words). Give 1-3 concrete, practical steps that fit what they said. Ask at most one gentle question, and only if it helps.
 - No lecturing, no boilerplate disclaimers, no diagnoses. If they mention self-harm or being unsafe, respond with care and urge them to contact local emergency services or a crisis line right now.
 ${nsChatDirective}
+${wellnessBlock ? `\n${wellnessBlock}` : ''}
 ${buildResearchBrief(theme, passages)}
 Draw on a finding above only where it genuinely helps answer THEIR latest message, in plain language, never as a citation list.`;
 
@@ -2220,6 +2291,7 @@ app.post('/api/dimension-insight', async (req, res) => {
   const allAnswers = sanitizeAnswerRecords(body.answers);
   const dimAnswers = answersForCategory(allAnswers, dimension.category);
   const risk = sanitizeRisk(body.riskAssessment);
+  const clientIntel = buildClientSignalBlock(body);
   const neuroscopeReadings = sanitizeNeuroScopeReadings(body.neuroscopeReadings);
   const others = (Array.isArray(body.otherDimensions) ? body.otherDimensions : [])
     .map(sanitizeDimension)
@@ -2255,7 +2327,7 @@ app.post('/api/dimension-insight', async (req, res) => {
   const system = buildDimensionSystemPrompt() + langDirective(req);
   // The primary classifier's run-wide reading is appended to the user prompt so
   // both model drafts (and the synthesis) are framed by the trained model.
-  const user = `${buildDimensionUserPrompt(promptInput)}\n\n${buildNeuroScopePromptBlock(neuroscopeReadings)}`;
+  const user = `${buildDimensionUserPrompt(promptInput)}\n\n${buildNeuroScopePromptBlock(neuroscopeReadings)}${clientIntel.block ? `\n\n${clientIntel.block}` : ''}`;
   const hasGemini = !!process.env.GEMINI_API_KEY;
   // Dimension insight is a communication-layer route (drafts an explanation),
   // so it draws from the communication Groq pool, same as the solution routes.

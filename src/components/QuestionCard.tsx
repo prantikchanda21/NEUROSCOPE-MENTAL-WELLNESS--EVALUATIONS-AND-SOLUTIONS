@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
+import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import { Question, AdaptiveSelectionMeta, EmotionClassification, NeuroScopeReading, SentimentResult } from '../types';
 import { analyzeAnswerSentiment, analyzeAnswerSentimentAsync, applySymptomFloor, readDirectAnswer } from '../utils/adaptiveEngine';
 import { checkImmediateRisk } from '../utils/clinicalEngine';
@@ -46,40 +47,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   const [speechSupported, setSpeechSupported] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [showEmptyWarning, setShowEmptyWarning] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  // Set to true only when the user explicitly clicks "stop" (or an
-  // unrecoverable error occurs). Otherwise onend triggers a silent
-  // auto-restart — see the comment on startRecognition below.
-  const manualStopRef = useRef(false);
-  // The desktop Web Speech API calls out to a cloud recognition service for
-  // every dictation session, so a transient blip (flaky wifi, a momentary
-  // DNS hiccup) surfaces as a 'network' error even though nothing is wrong
-  // with the app. Retry a couple of times with a short backoff before
-  // treating it as a real failure, instead of giving up on the first one.
-  const networkRetryCountRef = useRef(0);
-  // True while a delayed network-error retry (above) is scheduled, so
-  // onend's own immediate auto-restart doesn't also fire and race it.
-  const networkRetryPendingRef = useRef(false);
-  // Text already in the box when dictation started, so live/final
-  // transcripts get appended to it rather than replacing it.
+  // Text already in the box when native dictation starts. Partial speech
+  // results replace only the spoken portion so they do not duplicate.
   const baseTextRef = useRef('');
-  // Desktop Chrome/Edge's continuous speech recognition has a well-known
-  // failure mode that mobile rarely hits: after roughly 10-20s the session
-  // silently stalls — the mic stays "on" and no error/onend ever fires, but
-  // no more results are delivered, so dictation just goes dead. The restart
-  // in onend below only helps once the browser actually *ends* the session,
-  // which doesn't happen in the stall case. This timer proactively cycles
-  // the session on a fixed interval so it can never sit stalled for long;
-  // baseTextRef preserves everything already transcribed across the cycle,
-  // so the user sees at most a brief gap, not lost text.
-  const keepAliveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const clearKeepAlive = () => {
-    if (keepAliveTimerRef.current) {
-      clearInterval(keepAliveTimerRef.current);
-      keepAliveTimerRef.current = null;
-    }
-  };
 
   const isAnswerEmpty = text.trim().length === 0;
 
@@ -236,239 +207,157 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
     [question]
   );
 
-  // Check speech recognition support. The constructor can exist on an
-  // insecure origin (non-HTTPS, non-localhost) even though it will always
-  // fail there, so we also check isSecureContext up front and surface a
-  // clear reason instead of a confusing silent failure.
+  // Native Android speech recognition.
+  // This app is packaged for Android with Capacitor, so use the native
+  // speech-recognition plugin instead of the browser Web Speech API.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        setSpeechSupported(true);
-        if (window.isSecureContext === false) {
-          setSpeechError(
-            'Voice dictation needs a secure connection (HTTPS) or localhost. This page is loaded over an insecure connection, so the browser blocks microphone access.'
-          );
-        }
-      }
-    }
-  }, []);
+    let partialListener: { remove: () => Promise<void> } | null = null;
+    let segmentListener: { remove: () => Promise<void> } | null = null;
+    let stateListener: { remove: () => Promise<void> } | null = null;
+    let active = true;
 
-  // isRestart = true means this is an automatic continuation of the same
-  // dictation session (see onend below), so it must NOT reset baseTextRef —
-  // that would drop everything already committed.
-  const startRecognition = (lang: string, isRetry = false, isRestart = false) => {
-    const SpeechRecognition =
-      typeof window !== 'undefined' &&
-      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-    if (!SpeechRecognition) return;
+    const setupSpeech = async () => {
+      try {
+        const { available } = await SpeechRecognition.available();
+        if (!active) return;
+        setSpeechSupported(available);
 
-    if (!isRestart) {
-      manualStopRef.current = false;
-      baseTextRef.current = text.trim();
-      networkRetryCountRef.current = 0;
-    }
+        partialListener = await SpeechRecognition.addListener(
+          'partialResults',
+          ({ matches }) => {
+            if (!active) return;
+            const spoken = matches?.[0]?.trim() ?? '';
+            if (!spoken) return;
 
-    const recognition = new SpeechRecognition();
-    // continuous=true + an auto-restart on unexpected `onend` (below) is the
-    // actual fix here: with continuous=false, Chrome/Edge on desktop end
-    // recognition the moment they detect the first short pause in speech —
-    // which happens constantly in normal talking — so dictation appeared to
-    // "stop working" after a couple of words every time.
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognition.lang = lang;
+            const updated = [baseTextRef.current, spoken]
+              .filter(Boolean)
+              .join(' ')
+              .trim();
 
-    let finalTranscript = '';
+            setText(updated);
+            onSaveAnswer(updated);
+            onTypingBurst?.();
+            setShowEmptyWarning(false);
+          }
+        );
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setSpeechError(null);
-      // Cycle this session proactively (see comment on keepAliveTimerRef)
-      // instead of waiting to detect a stall that may never announce itself.
-      clearKeepAlive();
-      keepAliveTimerRef.current = setInterval(() => {
-        if (manualStopRef.current || recognitionRef.current !== recognition) {
-          clearKeepAlive();
-          return;
-        }
         try {
-          recognition.stop();
+          segmentListener = await SpeechRecognition.addListener('segmentResults', ({ matches }) => {
+            if (!active) return;
+            applySpeechMatches(matches);
+          });
         } catch {
-          // safe — onend will still fire and the restart logic takes it from there
+          // Older plugin builds may not expose segmented sessions.
         }
-      }, 12000);
-    };
 
-    recognition.onresult = (event: any) => {
-      // Getting any result at all means the connection to the speech
-      // service is healthy, so the network-error retry budget can reset.
-      networkRetryCountRef.current = 0;
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const chunk = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += `${chunk} `;
-        } else {
-          interim += chunk;
+        stateListener = await SpeechRecognition.addListener(
+          'listeningState',
+          ({ status }) => {
+            if (!active) return;
+            setIsListening(status === 'started');
+          }
+        );
+      } catch (error) {
+        console.error('Native speech recognition setup failed:', error);
+        if (active) {
+          setSpeechSupported(false);
+          setSpeechError('Voice dictation is unavailable on this device.');
         }
       }
-      // Live preview: show what's been said so far, including the
-      // still-being-recognized interim chunk, instead of leaving the box
-      // untouched until the mic stops — that silence is what made it look
-      // broken while actively speaking.
-      const preview = [baseTextRef.current, finalTranscript.trim(), interim.trim()]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      setText(preview);
     };
 
-    recognition.onerror = (event: any) => {
-      // A safe language falls back automatically instead of surfacing a
-      // confusing error the user can't act on.
-      if (event.error === 'language-not-supported' && !isRetry && lang !== 'en-US') {
-        recognitionRef.current = null;
-        startRecognition('en-US', true, isRestart);
+    void setupSpeech();
+
+    return () => {
+      active = false;
+      void partialListener?.remove();
+      void segmentListener?.remove();
+      void stateListener?.remove();
+      void SpeechRecognition.stop().catch(() => undefined);
+    };
+  }, [onSaveAnswer, onTypingBurst]);
+
+  // Keep the speech base text in sync with the text that existed before a
+  // native recognition session started. During recognition, partial results
+  // replace only the spoken portion so they don't duplicate on every event.
+  const applySpeechMatches = (matches?: string[]) => {
+    const spoken = matches?.[0]?.trim() ?? '';
+    if (!spoken) return;
+    const updated = [baseTextRef.current, spoken].filter(Boolean).join(' ').trim();
+    setText(updated);
+    onSaveAnswer(updated);
+    onTypingBurst?.();
+    setShowEmptyWarning(false);
+  };
+
+  const startNativeRecognition = async () => {
+    setSpeechError(null);
+    baseTextRef.current = text.trim();
+
+    try {
+      const permission = await SpeechRecognition.requestPermissions();
+
+      if (permission.speechRecognition !== 'granted') {
+        setSpeechError('Microphone permission is required for voice dictation.');
         return;
       }
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        manualStopRef.current = true;
-        setSpeechError(
-          'Microphone access is blocked. Click the lock/site-info icon in the address bar, allow the microphone, then try again.'
-        );
-      } else if (event.error === 'audio-capture') {
-        manualStopRef.current = true;
-        setSpeechError('No microphone was found. Please connect a microphone and try again.');
-      } else if (event.error === 'no-speech') {
-        // Common during a normal pause with continuous mode on — let onend
-        // below silently restart instead of surfacing this as an error.
-      } else if (event.error === 'network') {
-        // Retry a few times first — see the comment on networkRetryCountRef.
-        // Only give up and surface an error once retries are exhausted, so
-        // we don't let onend auto-restart into the same failure forever.
-        if (networkRetryCountRef.current < 2) {
-          networkRetryCountRef.current += 1;
-          networkRetryPendingRef.current = true;
-          recognitionRef.current = null;
-          setTimeout(() => {
-            networkRetryPendingRef.current = false;
-            if (!manualStopRef.current) startRecognition(lang, false, true);
-          }, 1200);
-        } else {
-          manualStopRef.current = true;
-          setSpeechError('Network error occurred with the speech engine. Please check your connection or type your answer.');
-        }
-      } else if (event.error === 'aborted') {
-        // User- or app-initiated stop; nothing to show.
-      } else {
-        manualStopRef.current = true;
-        setSpeechError(`Speech error: ${event.error || 'please check your microphone'}.`);
-      }
-    };
 
-    recognition.onend = () => {
-      clearKeepAlive();
-      recognitionRef.current = null;
-      const combinedFinal = finalTranscript.trim();
-      if (combinedFinal) {
-        const updated = [baseTextRef.current, combinedFinal].filter(Boolean).join(' ').trim();
-        baseTextRef.current = updated;
-        setText(updated);
-        onSaveAnswer(updated);
-        onTypingBurst?.();
-        setShowEmptyWarning(false);
+      const { available } = await SpeechRecognition.available();
+      if (!available) {
+        setSpeechSupported(false);
+        setSpeechError('Speech recognition is not available on this Android device.');
+        return;
       }
 
-      if (manualStopRef.current) {
-        setIsListening(false);
-      } else if (!networkRetryPendingRef.current) {
-        // Recognition ended on its own (e.g. the browser's built-in silence
-        // timeout) but the user never clicked stop — resume automatically so
-        // one pause in speech doesn't end the whole dictation. If a network
-        // error just scheduled its own delayed retry above, skip this
-        // immediate one so the two don't race and open two sessions at once.
-        startRecognition(lang, false, true);
-      }
-    };
+      setSpeechSupported(true);
+      setIsListening(true);
 
-    recognitionRef.current = recognition;
+      const response = await SpeechRecognition.start({
+        language: navigator.language || 'en-US',
+        maxResults: 3,
+        partialResults: true,
+        popup: false,
+        allowForSilence: 1200,
+      } as any);
+
+      // Some Android recognition services return the final match directly.
+      applySpeechMatches(response?.matches);
+    } catch (error: any) {
+      console.error('Native speech recognition start failed:', error);
+      setIsListening(false);
+      setSpeechError(
+        error?.message || 'Could not start voice dictation. Please allow microphone access and try again.'
+      );
+    }
+  };
+
+  const stopNativeRecognition = async () => {
     try {
-      recognition.start();
-    } catch (err: any) {
-      // InvalidStateError fires if a previous instance is still winding down
-      // (e.g. a fast double-click); one retry on the next tick resolves it.
-      if (err?.name === 'InvalidStateError') {
-        setTimeout(() => {
-          try {
-            recognition.start();
-          } catch {
-            manualStopRef.current = true;
-            setIsListening(false);
-            recognitionRef.current = null;
-            setSpeechError('Could not start voice recognition. Please try again.');
-          }
-        }, 250);
-      } else {
-        manualStopRef.current = true;
-        setIsListening(false);
-        recognitionRef.current = null;
-        setSpeechError('Could not start voice recognition. Please ensure microphone permissions are granted.');
-      }
+      await SpeechRecognition.stop();
+    } catch (error) {
+      console.error('Native speech recognition stop failed:', error);
+    } finally {
+      setIsListening(false);
     }
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     setSpeechError(null);
-    const SpeechRecognition =
-      typeof window !== 'undefined' &&
-      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
-    if (!SpeechRecognition) {
-      setSpeechError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+    if (isListening) {
+      await stopNativeRecognition();
       return;
     }
 
-    if (isListening && recognitionRef.current) {
-      manualStopRef.current = true;
-      clearKeepAlive();
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // safe — onend will still fire and reset state
-      }
-      return;
-    }
-
-    // Recognition itself owns the microphone permission prompt; requesting it
-    // separately via getUserMedia first was redundant and, on some browsers,
-    // released/reacquired the device fast enough to make recognition.start()
-    // fail right after with no useful error. Letting recognition handle its
-    // own permission flow is both simpler and more reliable.
-    startRecognition(navigator.language || 'en-US');
+    await startNativeRecognition();
   };
 
-  // Stop any in-flight recognition if the component unmounts mid-listen
-  // (e.g. the user navigates to the next question while still speaking).
+  // Stop recognition when leaving the question or unmounting the component.
   useEffect(() => {
     return () => {
-      // Mark as a manual stop first so the auto-restart-on-unexpected-end
-      // logic in onend doesn't keep the mic alive after the component (and
-      // its handlers' closures) are gone.
-      manualStopRef.current = true;
-      clearKeepAlive();
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {
-          // safe
-        }
-      }
+      void SpeechRecognition.stop().catch(() => undefined);
     };
-  }, []);
-
+  }, [question.id]);
 
   // Sync state with prop if question changes
   useEffect(() => {
@@ -568,11 +457,6 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               <span className="text-rose-400 normal-case tracking-normal font-bold">*</span>
             </label>
             <div className="flex items-center gap-2">
-              {/* Always rendered, even when unsupported — hiding it entirely
-                  on browsers without SpeechRecognition (e.g. desktop Firefox)
-                  just made the feature look missing/broken instead of telling
-                  the user why it isn't available. toggleListening() itself
-                  surfaces a clear message when the API doesn't exist. */}
               <button
                 type="button"
                 onClick={toggleListening}
@@ -583,11 +467,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                     ? 'bg-slate-800/80 hover:bg-slate-700 text-cyan-300 border border-slate-700'
                     : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-500 border border-slate-800'
                 }`}
-                title={
-                  speechSupported
-                    ? 'Speak your reflection'
-                    : 'Voice dictation isn\u2019t supported in this browser — click for details'
-                }
+                title={speechSupported ? 'Speak your reflection' : 'Voice dictation is unavailable on this device'}
               >
                 {isListening ? (
                   <>

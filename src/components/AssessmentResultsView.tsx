@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AssessmentResult, AIProvider, AnswerRecord, NeuroScopeReading, RiskAssessment, SolutionItem } from '../types';
 import type { RetrievedPassage } from '../utils/researchKnowledge';
 import { DimensionInsightDropdown } from './DimensionInsightDropdown';
+import type { WellnessProfile } from '../utils/wellnessProfileStorage';
+import { calculateWellnessBmi } from '../utils/wellnessProfileStorage';
 import { DEFAULT_HELPLINES, getAlternateProtocols } from '../utils/clinicalEngine';
 import { InteractiveNeuroTool } from './InteractiveNeuroTool';
 import { NeurochemicalSimulatorModal } from './NeurochemicalSimulatorModal';
@@ -55,6 +57,9 @@ interface AssessmentResultsViewProps {
    * the per-dimension insight briefs so the trained model's picture informs
    * each area's Gemini/Groq writing. */
   neuroscopeReadings?: NeuroScopeReading[];
+  wellnessProfile?: WellnessProfile | null;
+  /** Export the complete assessment conversation and final report. */
+  onDownloadChat?: () => void;
 }
 
 export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
@@ -67,6 +72,8 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
   riskAssessment,
   researchPassages,
   neuroscopeReadings,
+  wellnessProfile,
+  onDownloadChat,
 }) => {
   const [customFeedback, setCustomFeedback] = useState('');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -419,6 +426,17 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
                 <Download className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Full Report</span>
               </button>
+
+              {onDownloadChat && (
+                <button
+                  type="button"
+                  onClick={onDownloadChat}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-700 text-xs font-black transition-all cursor-pointer shadow-sm"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Full Chat</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -485,6 +503,40 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {wellnessProfile && wellnessProfile.useForPersonalization !== false && (
+        <div className="mb-8 rounded-3xl border border-emerald-100 bg-white p-5 md:p-7 shadow-[0_18px_55px_rgba(15,23,42,.07)]">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-600">Personalization context</p>
+                  <h2 className="mt-1 text-xl font-black tracking-tight text-slate-900">Your physical & lifestyle snapshot</h2>
+                </div>
+                <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Used for relevant guidance</span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {wellnessProfile.age !== undefined && <Metric label="Age" value={`${wellnessProfile.age} yrs`} />}
+                {wellnessProfile.heightCm !== undefined && <Metric label="Height" value={`${wellnessProfile.heightCm} cm`} />}
+                {wellnessProfile.weightKg !== undefined && <Metric label="Weight" value={`${wellnessProfile.weightKg} kg`} />}
+                {calculateWellnessBmi(wellnessProfile) !== null && <Metric label="BMI reference" value={`${calculateWellnessBmi(wellnessProfile)}`} />}
+                {wellnessProfile.sleepHours !== undefined && <Metric label="Sleep" value={`${wellnessProfile.sleepHours} h`} />}
+                {wellnessProfile.caffeineCups !== undefined && <Metric label="Caffeine" value={`${wellnessProfile.caffeineCups} cups`} />}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+                {wellnessProfile.exerciseFrequency && <span className="rounded-full bg-slate-50 px-2.5 py-1">Movement: {wellnessProfile.exerciseFrequency}</span>}
+                {wellnessProfile.tobacco && wellnessProfile.tobacco !== 'prefer-not-to-say' && <span className="rounded-full bg-slate-50 px-2.5 py-1">Nicotine: {wellnessProfile.tobacco}</span>}
+                {wellnessProfile.alcohol && wellnessProfile.alcohol !== 'prefer-not-to-say' && <span className="rounded-full bg-slate-50 px-2.5 py-1">Alcohol: {wellnessProfile.alcohol}</span>}
+                {wellnessProfile.medications && <span className="rounded-full bg-slate-50 px-2.5 py-1">Medication info recorded</span>}
+              </div>
+              <p className="mt-3 text-[11px] font-medium leading-relaxed text-slate-400">These details help tailor explanations and lifestyle suggestions. They are not used to calculate your mental-health score, and BMI is shown here only as a physical-wellness reference.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2-Column Wide Dashboard Grid Filling the Screen */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -559,6 +611,7 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
                     riskAssessment={riskAssessment ?? result.riskAssessment}
                     researchPassages={researchPassages}
                     neuroscopeReadings={neuroscopeReadings}
+                    wellnessProfile={wellnessProfile}
                     cacheKey={`${result.timestamp}|${dim.category}|${dim.score}|${dim.summary}`}
                   />
                 </div>
@@ -843,6 +896,7 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
         result={result}
+        wellnessProfile={wellnessProfile}
       />
 
       {/* 4. Thought Defusion & Cognitive Dissolver Modal */}
@@ -853,3 +907,12 @@ export const AssessmentResultsView: React.FC<AssessmentResultsViewProps> = ({
     </motion.div>
   );
 };
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-black text-slate-800">{value}</p>
+    </div>
+  );
+}
