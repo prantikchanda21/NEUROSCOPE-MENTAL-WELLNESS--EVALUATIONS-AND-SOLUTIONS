@@ -292,6 +292,187 @@ configured and reachable right now.
 
 ---
 
+<a id="updates"></a>
+
+## 13. 🚀 What's new — update log
+
+This round of updates makes NeuroScope **work without internet, run faster, and feel
+smoother**. Three changes, each explained below with *what* changed, *why*, and *where*
+in the code to find it.
+
+### 📌 Update highlights at a glance
+
+| # | Update | What you get | Theme |
+|---|---|---|---|
+| 1 | [Offline AI on your own device](#update-1--offline-ai-on-your-own-device) | A downloadable on-device model for tone, chat and solution cards | 📡 Offline |
+| 2 | [Installable, offline-first app](#update-2--installable-offline-first-app-service-worker) | After one visit the whole app runs with no internet | 📡 Offline |
+| 3 | [Web Workers + lighter animations](#update-3--web-worker-inference--animation-cleanup) | Models run off the UI thread; the interface feels faster | ⚡ Performance |
+
+---
+
+### 📡 Offline & on-device AI
+
+#### Update 1 — Offline AI on your own device
+
+A small **Offline AI** dropdown now lives in the header. One download and a model runs
+entirely in the browser — no internet, no API keys, no data leaving the device.
+
+| Where it helps | What the on-device model does |
+|---|---|
+| 🎯 **Tone ensemble** | Fills the LLM slot when Groq gives nothing (offline, rate-limited, providers down); returns a JSON tone reading only |
+| 💬 **"Chat with AI about this feeling"** | Cloud answer first; if none, the on-device model writes the reply; if it isn't ready, the template reply is used |
+| 🃏 **Solution card** | The built-in card shows instantly, then the on-device model rewrites title, empathy, nervous-system note, perspective, first move, steps, "later today" and affirmation in place |
+
+**Two model profiles** (`LOCAL_LLM_PROFILE` in `localLlm.ts`):
+
+| Profile | Model | Size | Default |
+|---|---|---|:---:|
+| `fast` | Llama 3.2 1B | ~1.3 GB | ✅ |
+| `quality` | Phi-3 mini | ~2.3 GB | |
+
+After switching profile: dropdown → **Remove from this device** → reload → download again.
+
+**It obeys the same rules as the tuned transformers** (one shared spec in
+`src/utils/toneRules.ts`, used by both the Groq and the on-device prompts):
+
+1. **Same taxonomy and scales** — `severe / distressed / neutral / calm`, `-1…1`, `0…1`.
+2. **Repair before use** — values are clamped; if label and score disagree, the *more
+   severe* one wins; truncated replies are salvaged; unusable ones are dropped.
+3. **Safety bypass first** — never consulted for critical-band / Suicidal readings or
+   imminent-risk language, and never used to write text for severe / high / critical risk.
+4. **Sticky severity** — it can escalate a reading, never talk a severe one down.
+5. **Minority weight** — `LOCAL_LLM_VOTE_PROFILE` (0.25–0.45) versus Groq's
+   `GROQ_VOTE_PROFILE` (0.55–0.8); the tuned transformers keep the majority.
+
+**Limits:** desktop Chrome/Edge with WebGPU and ≥4 GB memory; phones, Safari and most
+Firefox builds show "not available on this device". Each tone reading is bounded to 10 s.
+Replies written on-device end with *"(Written on your device by the offline AI.)"*.
+
+🧪 New test scripts: `npm run test:rules` (tone-rule and local-LLM-ensemble tests).
+
+📁 `src/utils/localLlm.ts` · `src/utils/toneRules.ts` · `src/workers/localLlm.worker.ts` · `src/workers/localLlmProtocol.ts` · `src/components/OfflineModelMenu.tsx` · `src/components/HeaderNav.tsx` · `src/components/DynamicSolutionCard.tsx` · `src/utils/dynamicFeelingSolutions.ts` · `scripts/test-tone-rules.ts` · `scripts/test-local-llm-ensemble.ts`
+
+---
+
+#### Update 2 — Installable, offline-first app (service worker)
+
+After **one online visit**, the whole app opens and runs with no network — shell, the
+NeuroScope DistilBERT model and all local fallbacks.
+
+| Layer | What's cached | When |
+|---|---|---|
+| **Precache** | `index.html`, hashed JS/CSS, icons, landscapes, manifest (files ≤ 2 MB) | At install |
+| **Warm cache** | The ~66 MB ONNX model, tokenizer/config, any chunk > 2 MB | Background, ~10 s after load |
+| **Left alone** | Hugging Face models and the on-device LLM (transformers.js manages its own cache) | — |
+
+- Navigation is **network-first (3 s)**, falling back to the cached `index.html`.
+- `/api/*` is **never intercepted**.
+- New deploys install in the background and take over once all tabs are closed — no
+  mid-session file swaps.
+- A web app manifest (`manifest.webmanifest`) makes the app installable, and registration
+  requests persistent storage so browsers don't evict the models.
+- Production builds only — `npm run dev` never registers the worker.
+
+**Quick test:** `npm run build && npx vite preview` → open `http://localhost:4173` once,
+wait ~30 s → DevTools → Application → Service Workers → tick **Offline** → reload.
+
+📁 `src/sw/service-worker.js` · `vite-plugin-sw.ts` · `src/utils/registerServiceWorker.ts` · `public/manifest.webmanifest` · `vite.config.ts` · `netlify.toml` · `vercel.json`
+
+---
+
+### ⚡ Performance
+
+#### Update 3 — Web Worker inference + animation cleanup
+
+**Web Workers.** All model loading and inference moved off the UI thread.
+
+```
+   MAIN THREAD (UI)                     WORKERS
+   ┌──────────────────┐         ┌──────────────────────────────────────┐
+   │ semanticEngine   │         │ primary : NeuroScope DistilBERT only │
+   │  caches, timeouts│◄───────►│           (clinical read never waits) │
+   │  risk logic      │         │ support : RoBERTa sentiment,          │
+   │  (softmax, bands,│         │           DistilRoBERTa emotions,     │
+   │   crisis override)│        │           MiniLM embeddings           │
+   └──────────────────┘         └──────────────────────────────────────┘
+```
+
+- Tokenization now happens off-thread too.
+- Embeddings return as **transferred `Float32Array` buffers** — no copying or boxing.
+- Download-progress events are throttled to ~8/s, so a 65 MB download no longer re-renders
+  the UI on every chunk.
+- Each model runs one **warm-up pass** on load, so the first real answer is already fast.
+- The old smoke-test and retry path (extra inference at load, up to 12 s) was removed.
+- **Safe fallback:** if a worker can't start or crashes, that role runs on the main thread
+  exactly as before. `getSemanticRuntimeModes()` reports `'worker' | 'inline'` per role.
+
+**Animations trimmed** so the interface stays smooth on modest hardware:
+- Removed: 90 infinitely twinkling stars, drifting particles, unused aurora keyframes,
+  `HelixWaveEffect`, `SpiralVortexEffect`, decorative pulsing dots/flames, and the
+  staggered landing entrances.
+- Day/night crossfade shortened **1000 ms → 300 ms**.
+- Heavy 3D flip / blur / scale / slide entrances → a simple **~120–150 ms fade**.
+- **Kept on purpose:** spinners and skeletons, the mic-recording pulse, the crisis card,
+  progress bars, the breathing-exercise animation and modal open/close.
+
+📁 `src/workers/semanticCore.ts` · `src/workers/semantic.worker.ts` · `src/utils/semanticTransport.ts` · `src/utils/semanticEngine.ts` · `src/components/RealisticGreeneryLandscape.tsx` · `vite.config.ts`
+
+---
+
+### 🧾 Summary of these updates
+
+<details>
+<summary><b>⚙️ Configuration & scripts</b></summary>
+
+| Item | Change |
+|---|---|
+| `LOCAL_LLM_PROFILE` | **New** in-code switch: `'fast'` (default) or `'quality'` |
+| `npm run test:rules` | **New** script — tone-rule and local-LLM ensemble tests |
+| `/sw.js` | **New** — generated at build time by `vite-plugin-sw.ts` (no new npm packages) |
+| `netlify.toml`, `vercel.json` | Updated so the service worker is never served from a stale HTTP cache |
+| `vite.config.ts` | `worker.format = 'es'` for the model workers |
+
+</details>
+
+<details>
+<summary><b>📂 New files added</b></summary>
+
+| Area | Files |
+|---|---|
+| Offline AI | `src/utils/localLlm.ts`, `src/utils/toneRules.ts`, `src/workers/localLlm.worker.ts`, `src/workers/localLlmProtocol.ts`, `src/components/OfflineModelMenu.tsx` |
+| Service worker | `src/sw/service-worker.js`, `vite-plugin-sw.ts`, `src/utils/registerServiceWorker.ts`, `public/manifest.webmanifest` |
+| Web Workers | `src/workers/semanticCore.ts`, `src/workers/semantic.worker.ts`, `src/workers/offlineFetchGuard.ts`, `src/utils/semanticTransport.ts` |
+| Tests | `scripts/test-tone-rules.ts`, `scripts/test-local-llm-ensemble.ts` |
+| Docs | `CHANGELOG_OFFLINE_PHI3.md`, `CHANGELOG_OFFLINE_CHAT.md`, `CHANGELOG_SERVICE_WORKER.md`, `CHANGELOG_WEB_WORKERS.md` |
+
+</details>
+
+<details>
+<summary><b>🗑️ Removed</b></summary>
+
+`HelixWaveEffect.tsx` overlay, `SpiralVortexEffect.tsx`, the twinkling-star and
+particle animations, and the old model smoke-test / retry-at-load path.
+
+</details>
+
+<details>
+<summary><b>🛡️ Safety guarantees that did not change</b></summary>
+
+- Explicit crisis language still triggers a deterministic, code-level override before any
+  model or API is consulted.
+- The on-device AI is never used for critical-band / Suicidal readings or to write text
+  for severe / high / critical risk, and it can never talk a `severe` reading back down.
+- Web Workers fall back to the main thread if they fail, so nothing safety-related
+  depends on a worker being available.
+- `/api/*` is never intercepted by the service worker, so live AI and crisis logic are
+  unaffected by caching.
+
+</details>
+
+> 📄 Full details live in `CHANGELOG_OFFLINE_PHI3.md`, `CHANGELOG_OFFLINE_CHAT.md`, `CHANGELOG_SERVICE_WORKER.md` and `CHANGELOG_WEB_WORKERS.md` at the project root.
+
+---
+
 <div align="center">
 
 *Built with React, Vite, Express, ONNX Runtime, and a Groq/Gemini/local-LLM fallback
