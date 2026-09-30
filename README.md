@@ -369,7 +369,6 @@ The app provides an **Offline AI** model download. The documented profiles are:
 | Profile | Model | Approx. size | Intended use |
 |---|---|---:|---|
 | `fast` | Llama 3.2 1B q4f16 | ~1.3 GB | Faster local communication |
-| `quality` | Phi-3 mini | ~2.3 GB | Higher-quality local communication |
 
 The selected model is downloaded once and cached locally for reuse. It can support tone/chat/solution
 rewrites where the safety path permits it.
@@ -798,53 +797,113 @@ formal privacy certification, clinical regulatory approval or independent securi
 
 # 18. Repository structure
 
-```text
-neuroscope/
+NEUROSCOPE-MENTAL-WELLNESS-EVALUATIONS-AND-SOLUTIONS/
+│
+├── api/
+│   └── index.ts
+│
+├── data/
+│   └── neuroscope_psyche_dataset.csv
+│
+├── public/
+│   │
+│   ├── brand/
+│   │   ├── favicon-32.png
+│   │   ├── favicon-64.png
+│   │   ├── icon-192.png
+│   │   ├── icon-512.png
+│   │   ├── neuroscope-full-logo.png
+│   │   └── neuroscope-logo.png
+│   │
+│   ├── landscapes/
+│   │   ├── day-landscape.jpg
+│   │   └── night-landscape.jpg
+│   │
+│   ├── models/
+│   │   └── neuroscope-distilbert/
+│   │
+│   └── manifest.webmanifest
+│
+├── models/
+│   │
+│   └── neuroscope-distilbert/
+│       │
+│       ├── onnx/
+│       │   └── model_quantized.onnx
+│       │
+│       ├── MODEL_CARD.md
+│       ├── config.json
+│       ├── metrics.json
+│       ├── risk_config.json
+│       ├── status_labels.json
+│       ├── tokenizer.json
+│       └── tokenizer_config.json
+│
+├── scripts/
+│   │
+│   ├── build-zip.js
+│   ├── test-local-llm-ensemble.ts
+│   ├── test-neuroscope-model.mjs
+│   └── test-tone-rules.ts
+│
 ├── src/
-│   ├── App.tsx
-│   ├── components/
-│   │   ├── QuestionCard.tsx
-│   │   ├── OfflineModelMenu.tsx
-│   │   ├── HeaderNav.tsx
-│   │   ├── DynamicSolutionCard.tsx
-│   │   └── ...
-│   ├── data/questions.ts
-│   ├── utils/
+│   │
+│   ├── engines/
 │   │   ├── riskEngine.ts
 │   │   ├── semanticEngine.ts
 │   │   ├── clinicalEngine.ts
 │   │   ├── localLlm.ts
 │   │   ├── toneRules.ts
-│   │   ├── semanticTransport.ts
-│   │   └── ...
+│   │   └── semanticTransport.ts
+│   │
 │   ├── workers/
 │   │   ├── semanticCore.ts
 │   │   ├── semantic.worker.ts
 │   │   ├── localLlm.worker.ts
 │   │   └── ...
+│   │
 │   └── sw/
 │       └── service-worker.js
-├── public/
-│   ├── models/
-│   │   └── neuroscope-distilbert/
-│   └── manifest.webmanifest
-├── data/
-│   └── neuroscope_psyche_dataset.csv
-├── api/
-│   └── index.ts
-├── scripts/
-├── server-app.ts
-├── server.ts
-├── translate-service.ts
-├── vite.config.ts
-├── vite-plugin-sw.ts
-├── vercel.json
-├── netlify.toml
-├── capacitor.config.ts
-├── package.json
+│
 ├── .env.example
-└── README.md
-```
+├── .gitignore
+├── .npmrc
+│
+├── ANDROID_EXTRAS_MANIFEST.json
+│
+├── LICENSE
+│
+├── README.md
+│
+├── capacitor.config.ts
+│
+├── favicon.ico
+│
+├── index.html
+│
+├── manifest.webmanifest
+│
+├── metadata.json
+│
+├── netlify.toml
+│
+├── package.json
+│
+├── package-lock.json
+│
+├── server-app.ts
+│
+├── server.ts
+│
+├── translate-service.ts
+│
+├── tsconfig.json
+│
+├── vercel.json
+│
+├── vite.config.ts
+│
+└── vite-plugin-sw.ts
 
 ---
 
