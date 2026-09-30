@@ -1067,14 +1067,10 @@ and record any native setup changes in a `CHANGELOG_*.md` file.
 - Treat user profile data as explicit, opt-in context.
 - Do not silently change the model/risk hierarchy when editing communication prompts.
 
-## License status
+## License Status
 
-**No explicit open-source license was supplied in the project materials reviewed for this README.**
-Until a license file is added, do not assume third parties have permission to redistribute, modify or
-commercially use the repository.
+This project is licensed under the MIT License. See the `LICENSE` file in the root directory for full details.
 
-Before public distribution, add the intended license (for example, MIT if that is the project's chosen
-policy) as a root-level `LICENSE` file and update this section accordingly.
 
 ---
 
