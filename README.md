@@ -524,11 +524,11 @@ summarises the documented configuration without exposing secrets.
 
 | Variable | Type | Default | Required? | Purpose |
 |---|---|---|:---:|---|
-| `GROQ_API_KEY` | string | empty | No | Tone-pool Groq key 1 |
-| `GROQ_API_KEY_2` | string | empty | No | Tone-pool Groq key 2 / fallback |
-| `GROQ_API_KEY_3` | string | empty | No | Communication-pool Groq key 1 |
-| `GROQ_API_KEY_4` | string | empty | No | Communication-pool Groq key 2 / fallback |
-| `GEMINI_API_KEY` | string | empty | No | Gemini communication fallback |
+| `GROQ_API_KEY` | string | empty | Yes (for better evaluation) | Tone-pool Groq key 1 |
+| `GROQ_API_KEY_2` | string | empty | Optional | Tone-pool Groq key 2 / fallback |
+| `GROQ_API_KEY_3` | string | empty | Yes (For communication) | Communication-pool Groq key 1 |
+| `GROQ_API_KEY_4` | string | empty | Optional | Communication-pool Groq key 2 / fallback |
+| `GEMINI_API_KEY` | string | empty | Optional | Gemini communication fallback |
 | `VITE_GOOGLE_CLIENT_ID` | string | empty | Android/web auth dependent | **Web OAuth client ID**; safe for client embedding, not a secret |
 | `VITE_API_BASE_URL` | URL | same-origin in web | Android build | Mobile app backend base URL; point to the separate Vercel project |
 | `LOCAL_LLM_ENABLED` | boolean | `false` | No | Enables optional local server-side LLM fallback |
