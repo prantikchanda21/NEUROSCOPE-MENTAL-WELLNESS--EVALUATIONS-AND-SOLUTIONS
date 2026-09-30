@@ -3,560 +3,1079 @@
 # 🧠 NeuroScope
 ### Mental Wellness Evaluation & Solution
 
-A web app that turns a short, conversational check-in into a grounded, research-backed
-mental-wellness assessment — with real-time risk detection, an empathetic AI write-up,
-and support in 140 languages.
+**Adaptive free-text screening · Fine-tuned DistilBERT · Safety-aware actions · Offline AI · Web + Android**
+
+[![Status](https://img.shields.io/badge/status-MVP%20%2F%20hackathon-informational)](#maturity-status)
+[![Node](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](#prerequisites)
+[![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=111111)](#tech-stack)
+[![TypeScript](https://img.shields.io/badge/typescript-7-3178C6?logo=typescript&logoColor=white)](#tech-stack)
+[![Vite](https://img.shields.io/badge/vite-8-646CFF?logo=vite&logoColor=white)](#tech-stack)
+[![Capacitor](https://img.shields.io/badge/capacitor-8-119EFF?logo=capacitor&logoColor=white)](#android-app)
+[![CI](https://img.shields.io/badge/CI-not%20configured-lightgrey)](#testing--qa)
+[![Coverage](https://img.shields.io/badge/coverage-not%20instrumented-lightgrey)](#testing--qa)
+[![Code Quality](https://img.shields.io/badge/quality-TypeScript%20%2B%20lint-informational)](#testing--qa)
+
+A research-grounded, multilingual mental-wellness screening application that turns a short,
+conversational check-in into structured status/risk signals, personalised actions,
+interactive practices and a safety-aware follow-up path.
+
+> **Scope:** NeuroScope is a screening, self-reflection and triage aid. It is **not a diagnosis,
+> crisis service, or substitute for professional care**. Safety logic is deterministic and
+> downstream communication must not override a critical safety reading.
 
 </div>
 
-**Jump to:** [What it does](#1-what-this-app-actually-does) ·
-[Features](#2-features-at-a-glance) ·
-[How a check-in flows](#3-how-one-assessment-flows-end-to-end) ·
-[Quick start](#4-quick-start) ·
-[Architecture](#5-high-level-architecture) ·
-[AI fallback chain](#6-the-ai-fallback-chain--two-independent-groq-pools) ·
-[Languages](#7-multilingual-support-140-languages) ·
-[Project layout](#8-project-layout-the-parts-youll-actually-touch) ·
-[The model](#9-the-screening-model) ·
-[Deploying](#10-deploying) ·
-[Tech stack](#11-tech-stack) ·
-[FAQ](#12-faq)
+---
+
+## Table of contents
+
+- [1. Context & value proposition](#1-context--value-proposition)
+- [2. Product highlights](#2-product-highlights)
+- [3. Architecture & system design](#3-architecture--system-design)
+- [4. End-to-end execution flow](#4-end-to-end-execution-flow)
+- [5. Model pipeline](#5-model-pipeline)
+- [6. Safety design](#6-safety-design)
+- [7. Personalisation layer](#7-personalisation-layer)
+- [8. Offline AI & offline-first behavior](#8-offline-ai--offline-first-behavior)
+- [9. Android app](#9-android-app)
+- [10. Installation & configuration](#10-installation--configuration)
+- [11. Environment variables](#11-environment-variables)
+- [12. API surface](#12-api-surface)
+- [13. Usage examples](#13-usage-examples)
+- [14. Testing & QA](#14-testing--qa)
+- [15. Reliability, performance & maturity](#15-reliability-performance--maturity)
+- [16. Troubleshooting & known limitations](#16-troubleshooting--known-limitations)
+- [17. Security & privacy](#17-security--privacy)
+- [18. Repository structure](#18-repository-structure)
+- [19. Deployment](#19-deployment)
+- [20. Updates](#20-updates)
+- [21. Governance, contribution & license](#21-governance-contribution--license)
+- [22. References](#22-references)
 
 ---
 
-## 1. What this app actually does
+# 1. Context & value proposition
 
-You answer a set of adaptive questions. Under the hood, three independent "judges" look
-at every answer and vote:
+## The problem
 
-```
-                 YOUR ANSWER
-                      │
-          ┌───────────┼───────────┐
-          ▼           ▼           ▼
-     ● DistilBERT  ● RoBERTa   ● Groq (LLM)
-     (fine-tuned    (general    (reads live
-      on 51k mental  sentiment)  tone/emotion)
-      health texts)
-          │           │           │
-          └─────┬─────┴─────┬─────┘
-                ▼           ▼
-           MAJORITY VOTE + SAFETY OVERRIDE
-        (explicit crisis language always wins,
-         no matter what the models say)
-                      │
-                      ▼
-            risk level: low → elevated → high → critical
-```
+Mental-wellness screening is often static, score-first and disconnected from a user's own
+language. Users may receive a label or score without a useful next action, while high-risk
+answers require immediate and explicit safety support.
 
-That risk level drives everything downstream: which coping tools you're shown, whether a
-crisis helpline is surfaced, and the tone of the AI-written feedback. Nothing about the
-safety-critical logic (crisis detection, helpline triggers) depends on an external AI
-call — it's deterministic and works even fully offline.
+## The NeuroScope approach
+
+NeuroScope uses a **50-item adaptive free-text question pool** across five wellbeing areas.
+Users can answer in their own words or by voice. A fine-tuned **DistilBERT primary classifier**
+provides status/risk signals; RoBERTa, emotion/semantic models and bounded Groq tone analysis
+add supporting context. A deterministic risk engine controls safety-critical behavior, while
+Groq/Gemini are used downstream for communication and evidence-grounded explanation.
+
+The same product is available as a responsive web experience and an Android app packaged with
+Capacitor. The Android build adds native Google Sign-In and native speech recognition rather than
+relying on browser-only WebView behavior.
+
+## Target users
+
+- Students and early-career professionals under sustained stress.
+- People looking for a private first step before seeking professional support.
+- Users who prefer conversational free-text or voice input over rigid forms.
+- Users who benefit from multilingual and offline-capable experiences.
+
+## Value proposition
+
+**Screen → understand → act → track → escalate safely when needed.**
+
+NeuroScope is intentionally model-first rather than LLM-first: the primary screening model and
+local safety logic anchor status/risk, while cloud AI communicates the findings instead of defining
+the clinical state.
 
 ---
 
-## 2. Features at a glance
+# 2. Product highlights
 
-| | |
+| Capability | What it does |
 |---|---|
-| 🩺 **50-question adaptive assessment** | Questions adjust based on how you've been answering — not a static form |
-| 🧠 **3-way risk ensemble** | On-device DistilBERT + RoBERTa + Groq LLM vote on every answer, with a hard safety override |
-| ✍️ **Per-answer AI writing** | Empathetic reflection, "what's happening in your nervous system," and a cognitive reframe — freshly written per answer, not templated |
-| 📊 **Biopsychosocial report** | 5 dimension score-cards, each with an expandable AI + research-backed deep dive |
-| 🌐 **140 languages** | Full UI + AI-answer translation, including 40 Indian languages and RTL support |
-| 🆘 **Deterministic crisis detection** | Explicit self-harm/suicide language always forces a critical-risk response, independent of any model or API call |
-| 📡 **Works fully offline** | Every AI-backed feature has a local, template-based fallback — zero API keys required to run the app |
-| 📄 **Research-grounded** | Answers are drawn from a corpus of real papers and clinical books, not free-floating LLM output |
+| 🧠 Adaptive assessment | 50-item pool with Quick / Balanced / Full modes (5 / 10 / 20 questions) |
+| 🎯 Primary model | Fine-tuned DistilBERT with 7 status classes + binary risk head |
+| 🧩 Supporting signals | RoBERTa, emotion signals, MiniLM semantic relevance, deterministic lexical fallbacks |
+| 🛡️ Safety engine | Mandatory safety item, explicit crisis markers and deterministic overrides |
+| ✍️ AI communication | Groq/Gemini generate explanations, reflections and solution steps downstream of model/risk results |
+| 📚 Research grounding | Question design and communication draw from the project psyche/research corpus and referenced papers/books |
+| 🌐 Multilingual UX | Runtime translation across 140 languages, including 40 Indian languages and RTL handling |
+| 📡 Offline AI | Optional on-device LLM download; local fallback for supported AI interactions |
+| 🧑‍💻 Wellness Profile | Optional age/height/weight/sleep/exercise/caffeine/lifestyle context for relevant personalisation |
+| 📄 Reporting | Printable A4 report + full-chat text export |
+| 📱 Android | Capacitor 8 wrapper with native Android Google Sign-In and native speech recognition |
+| 🔒 Privacy-first storage | Browser/device-local profile, history and streak data; no user database in the supplied architecture |
 
 ---
 
-## 3. How one assessment flows, end to end
+# 3. Architecture & system design
 
+## High-level architecture
+
+```text
+                              ┌──────────────────────────────┐
+                              │        Landing / Download    │
+                              │             site             │
+                              │          (Netlify)           │
+                              └──────────────┬───────────────┘
+                                             │
+                         ┌───────────────────┴──────────────────┐
+                         │                                      │
+                         ▼                                      ▼
+                Open NeuroScope web                    Download Android APK
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         NeuroScope client                                    │
+│                                                                             │
+│ React 19 + TypeScript + Vite + Tailwind + Motion                           │
+│                                                                             │
+│  Auth / profile / assessment / results / chat / tools / export              │
+│                │                                                            │
+│                ├── localStorage: profile, history, translations, streaks    │
+│                │                                                            │
+│                └── local inference: DistilBERT / semantic workers / fallbacks│
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │ HTTPS / same-origin API
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Server / API layer                                  │
+│                              Express                                        │
+│                                                                             │
+│ /api/assess · /api/feeling-solution · /api/tone-analysis                    │
+│ /api/dimension-insight · /api/translate · /api/reassess · /api/health       │
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │
+              ┌───────────────────┼─────────────────────┐
+              ▼                   ▼                     ▼
+        Groq tone pool     Groq communication     Gemini fallback
+        KEY 1 → KEY 2      KEY 3 → KEY 4           communication
+              │                   │
+              └──────────────┬────┘
+                             ▼
+                    local/template fallbacks
+
+Android path:
+
+Web bundle → Capacitor 8 → Android WebView shell
+                         ├── native Google Sign-In
+                         └── native speech recognition
 ```
- 1. You answer a question
-          │
-          ▼
- 2. On-device DistilBERT + RoBERTa read it            (runs in your browser)
-          │
-          ▼
- 3. Groq LLM reads the same answer for tone/nuance     ← tone-pool keys
-          │
-          ▼
- 4. Three-way vote → risk level (low/elevated/high/critical)
-    Explicit crisis language ALWAYS overrides the vote  ← safety net
-          │
-          ▼
- 5. Risk level shown live on the question card,
-    next question adapts to it
-          │
-          ▼
-      ... repeat for all 50 questions ...
-          │
-          ▼
- 6. Final report requested → server drafts:
-      • Empathetic Assessment & Reflection
-      • What's Happening In Your Nervous System
-      • Cognitive Perspective Shift
-      • 5 Biopsychosocial dimension scores            ← communication-pool keys
-          │
-          ▼
- 7. You can open any dimension's "Detailed insight" dropdown
-    → Gemini + Groq + research corpus combine into one
-      cross-checked, source-cited brief
-```
+
+## Service boundaries
+
+| Boundary | Responsibility |
+|---|---|
+| React client | UX, state, routing, local storage, local model execution, presentation |
+| DistilBERT local runtime | Primary status/risk inference from user free text |
+| Supporting model workers | Sentiment, emotion and semantic relevance signals |
+| Risk engine | Safety markers, bands, trend logic and deterministic overrides |
+| Express API | Assessment synthesis, tone, solutions, insights, translation and reassessment |
+| Groq | Bounded tone signal + communication fallback/primary communication rung depending on route |
+| Gemini | Communication fallback |
+| Offline LLM | Local supporting communication for supported non-critical flows |
+| Capacitor Android layer | Native packaging, speech recognition and Google Sign-In |
 
 ---
 
-## 4. Quick start
+# 4. End-to-end execution flow
+
+```text
+1. User signs in
+       │
+2. Optional Wellness Profile
+       │  age / height / weight / sleep / lifestyle
+       │  explicit personalisation control
+       ▼
+3. Choose language + assessment mode
+       │
+4. Answer by text or native Android voice
+       │
+       ▼
+5. Primary DistilBERT inference
+       │
+       ├── status probabilities
+       └── risk probability
+       │
+       ├───────────────► supporting tone / emotion / semantic signals
+       │
+       ▼
+6. Deterministic safety + adaptive engine
+       │
+       ├── crisis override if triggered
+       ├── mandatory safety coverage
+       ├── category balance
+       └── next-question selection
+       │
+       ▼
+7. Repeat until selected mode is complete
+       │
+       ▼
+8. Final synthesis
+       │  assessment evidence + approved profile context
+       ▼
+9. Results dashboard
+       │  dimensions + insights + actionable solutions
+       │
+       ├── follow-up chat
+       ├── interactive tools
+       ├── printable A4 report
+       └── full chat export
+```
+
+### Adaptive selection
+
+Each next item is selected from the 50-question pool using semantic relevance, sentiment/category
+signals, bounded variation and category constraints. The mandatory safety question is retained
+across assessment modes.
+
+---
+
+# 5. Model pipeline
+
+## Primary classifier
+
+- Base architecture: `distilbert-base-uncased`.
+- Fine-tuned on the cleaned **SENTIMENT ANALYSIS FOR MENTAL HEALTH** Kaggle dataset used by the project.
+- Training set documented in the project: **51,067 statements**.
+- Output: **7 status classes + binary risk flag**.
+- Deployment: quantized ONNX through Transformers.js for local inference.
+- The model is a **screening/triage aid**, not a diagnostic instrument.
+
+### Status taxonomy
+
+```text
+Normal
+Depression
+Suicidal
+Anxiety
+Bipolar
+Stress
+Personality Disorder
+```
+
+## Supporting signals
+
+```text
+DistilBERT          → primary status + risk
+RoBERTa             → sentiment / tone support
+Emotion model       → affective signal
+MiniLM              → semantic relevance
+Groq tone analysis  → bounded contextual tone signal
+Lexicon / TF overlap→ deterministic fallbacks
+```
+
+## Held-out metrics documented by the project
+
+| Metric | Value |
+|---|---:|
+| Status macro-F1 | 0.792 |
+| Status weighted-F1 | 0.818 |
+| Risk recall @ 0.22 | 0.916 |
+| Risk AUC | 0.967 |
+| Risk precision | 0.761 |
+
+These are project-reported held-out evaluation figures and should **not** be interpreted as
+clinical validation or evidence of equal performance across populations or languages.
+
+## Model hierarchy
+
+**DistilBERT anchors status/risk → supporting models enrich context → deterministic safety logic
+governs safety → Groq/Gemini communicate findings.**
+
+Cloud communication cannot override a deterministic critical safety reading.
+
+---
+
+# 6. Safety design
+
+Safety-critical behavior is intentionally not dependent on a cloud LLM call.
+
+### Core guarantees
+
+1. A mandatory safety item is present in every assessment mode.
+2. Explicit crisis/self-harm language can trigger a deterministic override.
+3. Critical-band readings bypass ordinary AI communication paths.
+4. The on-device LLM is not used to downgrade severe/high/critical safety states.
+5. Immediate-support UI can appear before the assessment ends when a high-risk signal is detected.
+6. The final report preserves the safety signal.
+
+```text
+User answer
+    │
+    ├── explicit crisis markers? ── YES ──► deterministic critical path
+    │                                          │
+    │                                          └── immediate support
+    │
+    └── NO ──► model + supporting signals ──► risk engine ──► normal flow
+```
+
+> Safety behavior is deterministic at the decision boundary, but no software-only detector can
+> guarantee detection of every high-risk situation.
+
+---
+
+# 7. Personalisation layer
+
+NeuroScope App now supports an optional **Wellness Profile** collected after sign-in.
+
+### Example fields
+
+- Age
+- Height
+- Weight
+- Average sleep
+- Exercise / movement frequency
+- Caffeine intake
+- Tobacco / nicotine
+- Alcohol
+- Medications
+- Physical notes
+
+### Design rule
+
+Profile data is **context**, not a replacement for the screening model.
+
+```text
+Wellness Profile
+      │
+      ▼
+Personalisation context
+      │
+      ├── assessment synthesis
+      ├── dynamic solutions
+      ├── follow-up chat
+      ├── dimension insights
+      └── final report
+
+NOT:
+
+Wellness Profile ──X──► mental-health score / classifier label
+```
+
+Height and weight may produce a local BMI reference for display, but BMI is not used to change the
+mental-health score.
+
+Users explicitly control whether profile context is used for personalisation. The implementation
+stores the profile locally and sanitises profile values before adding approved context to AI prompts.
+
+---
+
+# 8. Offline AI & offline-first behavior
+
+## Two offline layers
+
+### 1. Core local screening
+
+The quantized NeuroScope DistilBERT model runs locally through Transformers.js / ONNX. The
+assessment's core model and deterministic risk path therefore do not depend on a live API call.
+
+### 2. Optional local communication model
+
+The app provides an **Offline AI** model download. The documented profiles are:
+
+| Profile | Model | Approx. size | Intended use |
+|---|---|---:|---|
+| `fast` | Llama 3.2 1B q4f16 | ~1.3 GB | Faster local communication |
+| `quality` | Phi-3 mini | ~2.3 GB | Higher-quality local communication |
+
+The selected model is downloaded once and cached locally for reuse. It can support tone/chat/solution
+rewrites where the safety path permits it.
+
+### Offline-first web behavior
+
+The service worker caches the app shell and the bundled local model assets. API routes under
+`/api/*` are intentionally not intercepted by the service worker.
+
+### Device limits
+
+Offline LLM availability depends on device memory, browser/WebView capabilities and WebGPU support.
+The project documentation does not establish universal Android-device compatibility; treat the
+feature as capability-dependent and expose a clear unavailable state when local inference cannot start.
+
+---
+
+# 9. Android app
+
+NeuroScope is wrapped as an Android application using **Capacitor 8**.
+
+## Android-specific upgrades
+
+### Native voice recognition
+
+Android uses `@capgo/capacitor-speech-recognition` instead of the browser-only Web Speech API.
+The implementation supports native permissions, partial/segmented results and final-result handling.
+
+### Native Google Sign-In
+
+Android uses `@capgo/capacitor-social-login` and Google's Credential Manager path instead of loading the
+Google Identity Services JavaScript flow inside the WebView.
+
+Required Google Cloud configuration:
+
+```text
+Web OAuth client
+  → used as webClientId / VITE_GOOGLE_CLIENT_ID
+
+Android OAuth client
+  → package: com.neuroscope.app
+  → SHA-1: certificate used to sign the installed APK/AAB
+```
+
+For Play Store distribution, the Play App Signing certificate SHA-1 must also be registered.
+
+## Build flow
 
 ```bash
 npm install
-cp .env.example .env      # or .env.local — fill in whichever keys you have
-npm run dev                # → http://localhost:3000
+npm run build:web
+npx cap add android        # first Android setup only
+npx cap sync android
+npx cap open android
 ```
 
-You don't need **any** API key to run the app — see the fallback chain below. More
-keys just mean fresher, less repetitive AI writing.
+For command-line debug APK generation on Windows:
+
+```bat
+cd android
+gradlew.bat assembleDebug
+```
+
+Release builds should use a protected signing key. Do not commit keystores, passwords or signing
+secrets to GitHub.
 
 ---
 
-## 5. High-level architecture
+# 10. Installation & configuration
 
-```
-┌─────────────────────────────┐        ┌──────────────────────────────┐
-│           BROWSER            │        │         SERVER (Express)      │
-│                               │        │                                │
-│  React UI (App.tsx)           │        │  server-app.ts                │
-│   • Landing → Questions       │  HTTP  │   /api/assess                 │
-│   • 3D landscape scene        │◄──────►│   /api/feeling-solution       │
-│   • Results dashboard         │  JSON  │   /api/tone-analysis          │
-│                               │        │   /api/dimension-insight      │
-│  In-browser AI (ONNX.js)      │        │   /api/translate               │
-│   • DistilBERT model runs      │        │   /api/reassess                │
-│     locally, no server round-  │        │   /api/health                  │
-│     trip, works offline        │        │                                │
-│                               │        │  ── AI fallback chain ──►      │
-│  localStorage                 │        │  Groq → Groq(2nd key) →        │
-│   • assessment history        │        │  Gemini → local Phi-4-mini →   │
-│   • cached translations        │        │  offline template composer    │
-└─────────────────────────────┘        └──────────────────────────────┘
+## Prerequisites
+
+### General
+
+- Node.js **22.x recommended** (Node 20+ may be compatible with parts of the stack, but this repository's current deployment/runtime guidance is Node 22.x).
+- npm
+- Git
+- Modern browser with WebAssembly support
+
+### Android
+
+- Android Studio
+- Android SDK / platform tools
+- JDK 21-compatible Android Studio toolchain as supplied by the installed Android Studio setup
+- A Windows/macOS/Linux environment suitable for Gradle builds
+
+### Optional local LLM development
+
+- Hardware with enough memory/storage for the selected local model.
+- WebGPU/accelerator support where required by the browser/runtime.
+- Ollama or LM Studio only if using the server-side local-model fallback.
+
+## Clone + install
+
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd neuroscope
+npm install
 ```
 
-**Three ways to run the server side**, all sharing the exact same route logic:
+## Configure environment
 
+macOS/Linux:
+
+```bash
+cp .env.example .env
 ```
-server-app.ts  (shared Express app, all routes live here)
-      │
-      ├── server.ts     → long-running Node process   (npm run dev / npm start)
-      ├── api/index.ts  → Vercel serverless function
-      └── netlify func  → Netlify function
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Never commit `.env`.
+
+## Run locally
+
+```bash
+npm run dev
+```
+
+The local server entry point is `server.ts`. Use:
+
+```text
+http://localhost:3000
+```
+
+## Build web
+
+```bash
+npm run build:web
+```
+
+## Build the full production artifact
+
+```bash
+npm run build
+```
+
+## Start the bundled server
+
+```bash
+npm start
 ```
 
 ---
 
-## 6. The AI fallback chain — two independent Groq "pools"
+# 11. Environment variables
 
-Every AI-backed route calls one function, `callAIWithFallback()`, which tries
-providers **in order** and only skips to the next one if a key is missing, errored, or
-rate-limited:
+The repository's `.env.example` is the source of truth for available variables. The matrix below
+summarises the documented configuration without exposing secrets.
 
-```
-  TONE POOL  ●───────────────────────────────────●
-  (reads live emotion — /api/tone-analysis only)
-      GROQ_API_KEY ──► GROQ_API_KEY_2 ──► Gemini
-      (skips local model — stays fast during a live check-in)
+| Variable | Type | Default | Required? | Purpose |
+|---|---|---|:---:|---|
+| `GROQ_API_KEY` | string | empty | No | Tone-pool Groq key 1 |
+| `GROQ_API_KEY_2` | string | empty | No | Tone-pool Groq key 2 / fallback |
+| `GROQ_API_KEY_3` | string | empty | No | Communication-pool Groq key 1 |
+| `GROQ_API_KEY_4` | string | empty | No | Communication-pool Groq key 2 / fallback |
+| `GEMINI_API_KEY` | string | empty | No | Gemini communication fallback |
+| `VITE_GOOGLE_CLIENT_ID` | string | empty | Android/web auth dependent | **Web OAuth client ID**; safe for client embedding, not a secret |
+| `VITE_API_BASE_URL` | URL | same-origin in web | Android build | Mobile app backend base URL; point to the separate Vercel project |
+| `LOCAL_LLM_ENABLED` | boolean | `false` | No | Enables optional local server-side LLM fallback |
+| `LOCAL_LLM_URL` | URL | empty | No | Ollama / LM Studio local endpoint |
+| `LOCAL_LLM_MODEL` | string | empty | No | Local server-side model name |
 
-  COMMUNICATION POOL  ●───────────────────────────────●
-  (drafts the empathetic write-up — every other route)
-      GROQ_API_KEY_3 ──► GROQ_API_KEY_4 ──► Gemini ──► Local Llama 3.2 1B
-                                                        (your own PC)
-```
+### Production secret rules
 
-Two separate pools mean a burst of traffic on one job can never eat into the other's
-rate limit. **None of the four Groq keys are required** — every rung degrades
-gracefully, and with zero keys configured the app still runs fully offline using a
-templated local composer. Check `GET /api/health` any time to see which rungs are live.
-
----
-
-## 7. Multilingual support (140 languages)
-
-```
- User's page loads in English (the one stable source of truth)
-                     │
-        AutoTranslate walks the rendered DOM
-                     │
-         batches text ──► POST /api/translate
-                     │
-     Groq → Groq(2nd) → Gemini → local Phi-4 → echo (no key)
-                     │
-      swapped in place + cached in localStorage per language
-```
-
-40 Indian languages (Kannada, Hindi, Tamil, Telugu, Marathi, Bengali, Tulu, Konkani…)
-and 100 international ones, including automatic right-to-left layout for
-Arabic/Urdu/Hebrew/Persian.
+- Put `GROQ_*` and `GEMINI_API_KEY` in Vercel/Netlify/server environment variables.
+- Never place provider API keys in the Android app bundle.
+- Never commit `.env`.
+- `VITE_*` values are bundled into the client at build time; treat them as public configuration.
 
 ---
 
-## 8. Project layout (the parts you'll actually touch)
+# 12. API surface
 
+The Express app is shared across local Node, Vercel and Netlify entry points.
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/health` | GET | Reports provider/fallback availability |
+| `/api/assess` | POST | Final assessment synthesis / report generation |
+| `/api/feeling-solution` | POST | Dynamic actionable solution generation |
+| `/api/tone-analysis` | POST | Contextual tone/emotion signal |
+| `/api/dimension-insight` | POST | Detailed wellbeing-dimension insight |
+| `/api/translate` | POST | Runtime UI/answer translation |
+| `/api/reassess` | POST | Follow-up / re-assessment support |
+
+The complete request/response logic currently lives in `server-app.ts` and the Vercel entry point is
+`api/index.ts`.
+
+> **API documentation gap:** no OpenAPI/Swagger specification was supplied with the repository.
+> For technical review, the authoritative implementation is `server-app.ts`; an OpenAPI contract
+> can be added later without changing the route architecture.
+
+### Health check
+
+```bash
+curl https://YOUR-VERCEL-DOMAIN.vercel.app/api/health
 ```
+
+For local development:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+---
+
+# 13. Usage examples
+
+## Start a local session
+
+```bash
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+## Build Android after a frontend change
+
+```bash
+npm run build:web
+npx cap sync android
+```
+
+Do **not** run `npx cap add android` again once the `android/` directory exists.
+
+## Generate a debug APK (Windows)
+
+```bat
+cd android
+gradlew.bat assembleDebug
+```
+
+Output:
+
+```text
+android\app\build\outputs\apk\debug\app-debug.apk
+```
+
+## Print / PDF report
+
+Use the result screen's report/print action. The implementation opens a standalone printable A4
+report rather than printing the interactive dashboard container.
+
+## Full chat export
+
+Use **Download Full Chat** after the assessment to export the profile context (when saved),
+assessment questions/answers, AI follow-up turns and final summary as a text file.
+
+---
+
+# 14. Testing & QA
+
+## Available commands
+
+```bash
+npm run lint
+npm run test:rules
+```
+
+The rule tests cover the tone-rule and local-LLM ensemble logic.
+
+## Recommended technical-review sequence
+
+```bash
+npm install
+npm run lint
+npm run test:rules
+npm run build:web
+npx cap sync android
+cd android
+gradlew.bat assembleDebug
+```
+
+## Manual smoke-test checklist
+
+### Web
+
+- [ ] Login / account flow
+- [ ] Wellness Profile save/skip/edit behavior
+- [ ] 5 / 10 / 20-question modes
+- [ ] Adaptive next-question behavior
+- [ ] Text answer input
+- [ ] Voice input in supported browser environments
+- [ ] Live risk display / safety flow
+- [ ] Results dashboard
+- [ ] Dimension insight cards
+- [ ] AI follow-up chat
+- [ ] Offline AI download / reload behavior
+- [ ] Runtime language translation + RTL language
+- [ ] Print → Save as PDF
+- [ ] Download Full Chat
+
+### Android
+
+- [ ] Native microphone permission
+- [ ] Native speech recognition
+- [ ] Google Sign-In with matching package + SHA-1
+- [ ] Vercel API connectivity
+- [ ] Offline AI on a compatible device
+- [ ] Report export / file handling
+
+### Current badge truthfulness
+
+This repository does **not** include a hosted CI workflow or instrumented code-coverage pipeline in the
+supplied materials. The badges at the top deliberately show those states instead of claiming green
+builds or a coverage percentage that has not been measured.
+
+---
+
+# 15. Reliability, performance & maturity
+
+## Maturity status
+
+**MVP / hackathon-ready implementation.** The supplied repository demonstrates an integrated web +
+Android architecture, but it should not be treated as clinically validated production software.
+
+## Documented model performance
+
+See [Model pipeline](#5-model-pipeline) for held-out classification figures.
+
+## Runtime performance notes
+
+The project includes several performance optimisations:
+
+- Model inference moved to Web Workers where supported.
+- Warm-up passes reduce first-response overhead after model load.
+- Download progress updates are throttled.
+- Heavy decorative animations were trimmed for lower-end hardware.
+- Local and cloud fallbacks prevent most communication features from hard-failing when one provider is unavailable.
+
+**Formal end-to-end latency/throughput benchmarks are not included in the supplied repository.**
+Do not quote a single production latency or throughput number without running a controlled benchmark.
+
+## Reliability strategy
+
+```text
+Groq tone pool
+  GROQ_1 → GROQ_2 → Gemini
+
+Communication pool
+  GROQ_3 → GROQ_4 → Gemini → local Phi fallback → template/local fallback
+```
+
+Provider errors and rate limits are handled by the fallback chain where a route permits fallback.
+Safety-critical routing remains independent of provider availability.
+
+---
+
+# 16. Troubleshooting & known limitations
+
+| Problem | Likely cause | Fix / workaround |
+|---|---|---|
+| `npx cap open android` cannot find Android Studio | Android Studio path not configured | Install Android Studio or open `android/` manually; configure `CAPACITOR_ANDROID_STUDIO_PATH` if needed |
+| Gradle download timeout | Network cannot reach `services.gradle.org` | Retry on a stable network or use a locally available Gradle distribution; avoid committing machine-specific wrapper paths |
+| Gradle cannot delete files under `OneDrive` | OneDrive/Windows file locks generated build files | Build from a local path such as `C:\NeuroScopeMobile`, then rerun `gradlew.bat clean` |
+| `QuestionCard` module not found | File placed in wrong path | Ensure `src/components/QuestionCard.tsx` matches the import in `App.tsx` |
+| Android Google Sign-In says authorization failed | OAuth package/SHA-1/web client mismatch | Verify Android OAuth client uses `com.neuroscope.app` + the installed APK certificate SHA-1; keep the Web client ID in `VITE_GOOGLE_CLIENT_ID` |
+| Google Sign-In works on web but not APK | Web GIS flow used inside WebView | Use the native Capacitor social-login implementation for Android |
+| Voice button listens but returns no text | Speech result lifecycle issue | Use the native Capacitor speech plugin and handle segmented/final results |
+| `/api/*` returns 404 on Vercel | Serverless route/rewrites not deployed | Verify `vercel.json` and `api/index.ts`; check `/api/health` |
+| APK calls wrong backend | `VITE_API_BASE_URL` not set at build time | Set it to the mobile Vercel deployment, then `npm run build:web && npx cap sync android` |
+| Offline LLM unavailable | Device/WebGPU/memory limitation | Use a compatible device/runtime or continue with the local deterministic / template fallbacks |
+| Printed report is clipped | Old dashboard print CSS or stale build | Rebuild web assets and regenerate the standalone report from the current version |
+| Text appears low-contrast | Old utility classes override foreground colors | Use the latest mobile stylesheet/contrast layer and rebuild |
+
+### Important deployment trade-off
+
+The mobile Android app is intentionally isolated from the original website backend by using a separate
+Vercel deployment and a build-time `VITE_API_BASE_URL`. This reduces the risk of changing the public
+site while iterating on the mobile app.
+
+---
+
+# 17. Security & privacy
+
+## Data handling model
+
+The supplied architecture uses browser/device-local storage for authentication state, assessment
+history, translations and streaks rather than a central user database.
+
+Cloud AI requests may receive the minimum context required for the selected feature, including
+user-approved wellness context when personalisation is enabled.
+
+### Secrets
+
+- Provider API keys belong on the server/hosting platform.
+- API keys must never be bundled into the Android client.
+- Google `VITE_GOOGLE_CLIENT_ID` is configuration, not an API secret.
+- Signing keys/keystores are private credentials and must not be committed.
+
+### Android Google authentication
+
+The Android client is tied to:
+
+```text
+package = com.neuroscope.app
+certificate SHA-1 = signing key fingerprint
+```
+
+Use separate debug/release/Play App Signing fingerprints as appropriate.
+
+### Vulnerability reporting
+
+For a public GitHub repository:
+
+1. Use **GitHub Security → Advisories** / private vulnerability reporting if enabled.
+2. Do not post credentials, API keys, signing keys or exploitable details in a public issue.
+3. Include affected version/commit, reproduction steps, impact and any safe mitigation.
+4. Rotate exposed secrets immediately if a credential is accidentally committed.
+
+### Security limitations
+
+This README documents the current architecture; it does not claim a formal penetration test,
+formal privacy certification, clinical regulatory approval or independent security audit.
+
+---
+
+# 18. Repository structure
+
+```text
 neuroscope/
 ├── src/
-│   ├── App.tsx                 # main app shell / routing between screens
-│   ├── components/             # UI: landing page, question cards, results, modals
-│   ├── data/questions.ts       # the 50 assessment questions
+│   ├── App.tsx
+│   ├── components/
+│   │   ├── QuestionCard.tsx
+│   │   ├── OfflineModelMenu.tsx
+│   │   ├── HeaderNav.tsx
+│   │   ├── DynamicSolutionCard.tsx
+│   │   └── ...
+│   ├── data/questions.ts
 │   ├── utils/
-│   │   ├── riskEngine.ts       # crisis-language detection + risk scoring
-│   │   ├── semanticEngine.ts   # 3-way sentiment ensemble
-│   │   ├── clinicalEngine.ts   # maps answers → 5 biopsychosocial dimensions
-│   │   └── researchKnowledge.ts# grounds AI answers in real papers/books
-│   └── i18n/                   # language switcher + auto-translate engine
-├── public/models/neuroscope-distilbert/   # the fine-tuned model (ONNX, runs in-browser)
-├── data/neuroscope_psyche_dataset.csv     # training data reference
-├── server-app.ts                # ALL API routes live here (shared everywhere)
-├── server.ts                    # local dev / Node server entry point
-├── api/index.ts                 # Vercel serverless entry point
-└── .env.example                 # every environment variable, explained inline
+│   │   ├── riskEngine.ts
+│   │   ├── semanticEngine.ts
+│   │   ├── clinicalEngine.ts
+│   │   ├── localLlm.ts
+│   │   ├── toneRules.ts
+│   │   ├── semanticTransport.ts
+│   │   └── ...
+│   ├── workers/
+│   │   ├── semanticCore.ts
+│   │   ├── semantic.worker.ts
+│   │   ├── localLlm.worker.ts
+│   │   └── ...
+│   └── sw/
+│       └── service-worker.js
+├── public/
+│   ├── models/
+│   │   └── neuroscope-distilbert/
+│   └── manifest.webmanifest
+├── data/
+│   └── neuroscope_psyche_dataset.csv
+├── api/
+│   └── index.ts
+├── scripts/
+├── server-app.ts
+├── server.ts
+├── translate-service.ts
+├── vite.config.ts
+├── vite-plugin-sw.ts
+├── vercel.json
+├── netlify.toml
+├── capacitor.config.ts
+├── package.json
+├── .env.example
+└── README.md
 ```
 
 ---
 
-## 9. The screening model
+# 19. Deployment
 
-- **Base:** `distilbert-base-uncased`, fine-tuned on **51,067** labeled mental-health
-  statements.
-- **Predicts:** 7 categories (Normal, Depression, Suicidal, Anxiety, Bipolar, Stress,
-  Personality Disorder) + a binary risk flag, from one shared encoder.
-- **Measured performance:** 79% macro-F1 on classification; 91.6% recall on the risk
-  flag (tuned to catch true risk over avoiding false alarms — a deliberate trade-off).
-- **Important:** this is a screening/triage aid, not a diagnostic tool, and it always
-  routes concerning results to real human-support resources rather than making a final
-  call on its own.
+## Vercel
 
-Full details: `public/models/neuroscope-distilbert/MODEL_CARD.md`.
+The repository contains a Vercel serverless entry point and `/api/*` rewrites.
 
----
+Recommended mobile deployment pattern:
 
-## 10. Deploying
+```text
+Original NeuroScope site
+        │
+        └── keep unchanged
 
-The app is set up to deploy as-is to any of these — pick one:
-
-| Platform | Notes |
-|---|---|
-| **Vercel** | `vercel.json` rewrites `/api/*` to `api/index.ts` |
-| **Netlify** | `netlify.toml` + a Netlify Function wrapping `server-app.ts` |
-| **Your own server** | `npm run build && npm start` runs the bundled Node server |
-
-Environment variables are the same everywhere — see `.env.example` for the full,
-annotated list (Groq keys, Gemini key, optional local-LLM settings, Google Sign-In).
-
----
-
-## 11. Tech stack
-
-```
-Frontend    React 19 · Vite · TypeScript · Tailwind CSS · Framer Motion
-On-device AI Transformers.js (ONNX Runtime) — runs the DistilBERT model in-browser
-Backend     Express (shared across Node / Vercel / Netlify entry points)
-AI providers Groq · Google Gemini · local Phi-4-mini/Phi-3 (Ollama / LM Studio)
-Storage     Browser localStorage (history, cached translations) — no user database
-Deploy      Vercel, Netlify, or a plain Node server — pick any one
+Separate mobile repository/project
+        │
+        └── separate Vercel project
+                 │
+                 └── Android APK uses VITE_API_BASE_URL
 ```
 
----
+### Vercel setup
 
-## 12. FAQ
+1. Import the GitHub repository into a new Vercel project.
+2. Add the server-side environment variables.
+3. Add `VITE_GOOGLE_CLIENT_ID` if Google auth is required in the built frontend.
+4. Redeploy after environment changes.
+5. Verify:
 
-**Do I need any API keys to try it?**
-No. Every AI-backed feature has an offline fallback. Keys just make the AI-written
-sections fresher and less repetitive — see [section 6](#6-the-ai-fallback-chain--two-independent-groq-pools).
-
-**Why two Groq key pools instead of one?**
-So a burst of traffic on the solution-writing routes can never eat into the rate limit
-the live tone reading needs mid-assessment, and vice versa.
-
-**Can the AI override a crisis reading?**
-No. Explicit self-harm/suicide language triggers a deterministic, code-level override
-before any model or API is even consulted — that path never depends on a network call.
-
-**Is this a diagnostic tool?**
-No — it's a screening/triage aid meant to support reflection and point toward real
-human help. See the model card at `public/models/neuroscope-distilbert/MODEL_CARD.md`.
-
-**How do I check which AI providers are currently active?**
-Hit `GET /api/health` — it reports exactly which of the four fallback rungs are
-configured and reachable right now.
-
----
-
-<a id="updates"></a>
-
-## 13. 🚀 What's new — update log
-
-This round of updates makes NeuroScope **work without internet, run faster, and feel
-smoother**. Three changes, each explained below with *what* changed, *why*, and *where*
-in the code to find it.
-
-### 📌 Update highlights at a glance
-
-| # | Update | What you get | Theme |
-|---|---|---|---|
-| 1 | [Offline AI on your own device](#update-1--offline-ai-on-your-own-device) | A downloadable on-device model for tone, chat and solution cards | 📡 Offline |
-| 2 | [Installable, offline-first app](#update-2--installable-offline-first-app-service-worker) | After one visit the whole app runs with no internet | 📡 Offline |
-| 3 | [Web Workers + lighter animations](#update-3--web-worker-inference--animation-cleanup) | Models run off the UI thread; the interface feels faster | ⚡ Performance |
-| 4 | [Android app + native integrations](#update-4--android-app--native-integrations) | Capacitor Android build with native Google Sign-In and native voice dictation | 📱 Mobile |
-| 5 | [Wellness Profile personalization](#update-5--wellness-profile-personalization) | Optional physical/lifestyle context improves relevant guidance without changing the core mental-health score | 🧍 Personalization |
-| 6 | [Printable report + full chat export](#update-6--printable-report--full-chat-export) | Clean A4 reports and downloadable assessment/chat records | 📄 Reports |
-| 7 | [Mobile readability + contrast](#update-7--mobile-readability--contrast) | White mobile UI with solid-black, bold typography across the app | 🎨 UI |
-
----
-
-### 📡 Offline & on-device AI
-
-#### Update 1 — Offline AI on your own device
-
-A small **Offline AI** dropdown now lives in the header. One download and a model runs
-entirely in the browser — no internet, no API keys, no data leaving the device.
-
-| Where it helps | What the on-device model does |
-|---|---|
-| 🎯 **Tone ensemble** | Fills the LLM slot when Groq gives nothing (offline, rate-limited, providers down); returns a JSON tone reading only |
-| 💬 **"Chat with AI about this feeling"** | Cloud answer first; if none, the on-device model writes the reply; if it isn't ready, the template reply is used |
-| 🃏 **Solution card** | The built-in card shows instantly, then the on-device model rewrites title, empathy, nervous-system note, perspective, first move, steps, "later today" and affirmation in place |
-
-**Two model profiles** (`LOCAL_LLM_PROFILE` in `localLlm.ts`):
-
-| Profile | Model | Size | Default |
-|---|---|---|:---:|
-| `fast` | Llama 3.2 1B | ~1.3 GB | ✅ |
-| `quality` | Phi-3 mini | ~2.3 GB | |
-
-After switching profile: dropdown → **Remove from this device** → reload → download again.
-
-**It obeys the same rules as the tuned transformers** (one shared spec in
-`src/utils/toneRules.ts`, used by both the Groq and the on-device prompts):
-
-1. **Same taxonomy and scales** — `severe / distressed / neutral / calm`, `-1…1`, `0…1`.
-2. **Repair before use** — values are clamped; if label and score disagree, the *more
-   severe* one wins; truncated replies are salvaged; unusable ones are dropped.
-3. **Safety bypass first** — never consulted for critical-band / Suicidal readings or
-   imminent-risk language, and never used to write text for severe / high / critical risk.
-4. **Sticky severity** — it can escalate a reading, never talk a severe one down.
-5. **Minority weight** — `LOCAL_LLM_VOTE_PROFILE` (0.25–0.45) versus Groq's
-   `GROQ_VOTE_PROFILE` (0.55–0.8); the tuned transformers keep the majority.
-
-**Limits:** desktop Chrome/Edge with WebGPU and ≥4 GB memory; phones, Safari and most
-Firefox builds show "not available on this device". Each tone reading is bounded to 10 s.
-Replies written on-device end with *"(Written on your device by the offline AI.)"*.
-
-🧪 New test scripts: `npm run test:rules` (tone-rule and local-LLM-ensemble tests).
-
-📁 `src/utils/localLlm.ts` · `src/utils/toneRules.ts` · `src/workers/localLlm.worker.ts` · `src/workers/localLlmProtocol.ts` · `src/components/OfflineModelMenu.tsx` · `src/components/HeaderNav.tsx` · `src/components/DynamicSolutionCard.tsx` · `src/utils/dynamicFeelingSolutions.ts` · `scripts/test-tone-rules.ts` · `scripts/test-local-llm-ensemble.ts`
-
----
-
-#### Update 2 — Installable, offline-first app (service worker)
-
-After **one online visit**, the whole app opens and runs with no network — shell, the
-NeuroScope DistilBERT model and all local fallbacks.
-
-| Layer | What's cached | When |
-|---|---|---|
-| **Precache** | `index.html`, hashed JS/CSS, icons, landscapes, manifest (files ≤ 2 MB) | At install |
-| **Warm cache** | The ~66 MB ONNX model, tokenizer/config, any chunk > 2 MB | Background, ~10 s after load |
-| **Left alone** | Hugging Face models and the on-device LLM (transformers.js manages its own cache) | — |
-
-- Navigation is **network-first (3 s)**, falling back to the cached `index.html`.
-- `/api/*` is **never intercepted**.
-- New deploys install in the background and take over once all tabs are closed — no
-  mid-session file swaps.
-- A web app manifest (`manifest.webmanifest`) makes the app installable, and registration
-  requests persistent storage so browsers don't evict the models.
-- Production builds only — `npm run dev` never registers the worker.
-
-**Quick test:** `npm run build && npx vite preview` → open `http://localhost:4173` once,
-wait ~30 s → DevTools → Application → Service Workers → tick **Offline** → reload.
-
-📁 `src/sw/service-worker.js` · `vite-plugin-sw.ts` · `src/utils/registerServiceWorker.ts` · `public/manifest.webmanifest` · `vite.config.ts` · `netlify.toml` · `vercel.json`
-
----
-
-### ⚡ Performance
-
-#### Update 3 — Web Worker inference + animation cleanup
-
-**Web Workers.** All model loading and inference moved off the UI thread.
-
-```
-   MAIN THREAD (UI)                     WORKERS
-   ┌──────────────────┐         ┌──────────────────────────────────────┐
-   │ semanticEngine   │         │ primary : NeuroScope DistilBERT only │
-   │  caches, timeouts│◄───────►│           (clinical read never waits) │
-   │  risk logic      │         │ support : RoBERTa sentiment,          │
-   │  (softmax, bands,│         │           DistilRoBERTa emotions,     │
-   │   crisis override)│        │           MiniLM embeddings           │
-   └──────────────────┘         └──────────────────────────────────────┘
+```text
+https://YOUR-VERCEL-DOMAIN.vercel.app/api/health
 ```
 
-- Tokenization now happens off-thread too.
-- Embeddings return as **transferred `Float32Array` buffers** — no copying or boxing.
-- Download-progress events are throttled to ~8/s, so a 65 MB download no longer re-renders
-  the UI on every chunk.
-- Each model runs one **warm-up pass** on load, so the first real answer is already fast.
-- The old smoke-test and retry path (extra inference at load, up to 12 s) was removed.
-- **Safe fallback:** if a worker can't start or crashes, that role runs on the main thread
-  exactly as before. `getSemanticRuntimeModes()` reports `'worker' | 'inline'` per role.
+## Netlify
 
-**Animations trimmed** so the interface stays smooth on modest hardware:
-- Removed: 90 infinitely twinkling stars, drifting particles, unused aurora keyframes,
-  `HelixWaveEffect`, `SpiralVortexEffect`, decorative pulsing dots/flames, and the
-  staggered landing entrances.
-- Day/night crossfade shortened **1000 ms → 300 ms**.
-- Heavy 3D flip / blur / scale / slide entrances → a simple **~120–150 ms fade**.
-- **Kept on purpose:** spinners and skeletons, the mic-recording pulse, the crisis card,
-  progress bars, the breathing-exercise animation and modal open/close.
+`netlify.toml` and the shared Express logic support Netlify deployment through a function wrapper.
 
-📁 `src/workers/semanticCore.ts` · `src/workers/semantic.worker.ts` · `src/utils/semanticTransport.ts` · `src/utils/semanticEngine.ts` · `src/components/RealisticGreeneryLandscape.tsx` · `vite.config.ts`
+## Self-hosted Node
+
+```bash
+npm run build
+npm start
+```
 
 ---
 
-### 📱 Mobile & Android
+# 20. Updates
 
-#### Update 4 — Android app + native integrations
+## 📌 Android + personalisation + reporting update
 
-NeuroScope can now be packaged as an Android app with **Capacitor 8**, while keeping the same React/Vite frontend and shared backend routes. The Android path replaces WebView-fragile browser integrations with native mobile plugins where needed.
+### 01 — Android application layer
 
-| Where it helps | What changed |
-|---|---|
-| 📦 **Android packaging** | Added Capacitor Android project support with `com.neuroscope.app` as the application ID |
-| 🔐 **Google Sign-In** | Android uses `@capgo/capacitor-social-login` with Google's Credential Manager instead of relying on Google Identity Services inside the Android WebView |
-| 🎙️ **Voice Dictate** | Android uses `@capgo/capacitor-speech-recognition` with native microphone permission, segmented/partial results and final-result handling |
-| 🌐 **Cloud AI** | The mobile build can point to its separate Vercel backend through `VITE_API_BASE_URL`; API secrets remain server-side |
-| 📴 **Offline AI** | The downloaded local LLM remains on-device and does not require Groq/Gemini for local inference |
+**What changed**
+- Added Capacitor 8 configuration and Android project support.
+- Added a clean, white mobile UI with bold black typography.
+- Added a separate mobile Vercel backend path so the existing public website can remain isolated.
 
-**Google setup:** the Android OAuth client must use the package name `com.neuroscope.app` plus the SHA-1 of the certificate that signs the APK. The **Web application OAuth client ID** is the value supplied as the native sign-in `webClientId`.
+**Why**
+- Package the existing NeuroScope experience as an Android app without rewriting the product from scratch.
+- Keep mobile deployment independent of the original website.
 
-📁 `capacitor.config.ts` · `src/utils/googleAuth.ts` · `src/components/QuestionCard.tsx` · `ANDROID_NATIVE_AUTH_SETUP.md`
+### 02 — Native voice recognition
+
+**What changed**
+- Replaced the Android WebView/browser speech path with `@capgo/capacitor-speech-recognition`.
+- Added native Android microphone permissions.
+- Added segmented/partial-result handling plus final-result fallback.
+
+**Why**
+- Make voice answers appropriate for Android rather than depending on browser-only Web Speech behavior.
+
+### 03 — Native Google authentication
+
+**What changed**
+- Replaced the WebView Google Identity Services flow for Android with `@capgo/capacitor-social-login`.
+- Configured Google through the native Android Credential Manager path.
+- Kept the Web OAuth client ID as `webClientId` / `VITE_GOOGLE_CLIENT_ID`.
+- Added Android package + SHA-1 configuration requirements.
+
+**Why**
+- Use an Android-native sign-in flow instead of a browser authentication library inside a WebView.
+
+### 04 — Wellness Profile personalisation
+
+**What changed**
+- Added optional age, height, weight, sleep, movement, caffeine, tobacco/nicotine, alcohol,
+  medication and physical-note fields.
+- Added explicit user control over using profile data for personalisation.
+- Added local BMI reference calculation.
+- Wired approved profile context into assessment synthesis, dynamic solutions, follow-up chat,
+  dimension insights and final reporting.
+
+**Why**
+- Add useful personal context without turning physical measurements into the mental-health score.
+
+### 05 — Full-chat export + printable report
+
+**What changed**
+- Added **Download Full Chat**.
+- Export includes assessment Q&A, follow-up chat turns, final summary and saved profile context when applicable.
+- Reworked print output into a standalone A4 report with stable pagination.
+
+**Why**
+- Give users a portable record and a clean PDF-friendly report instead of printing the interactive dashboard.
+
+### 06 — Contrast / readability pass
+
+**What changed**
+- Forced primary app typography to solid black and heavier weights.
+- Removed remaining transparent/white text treatments that became unreadable on the clean white mobile UI.
+
+**Why**
+- Improve readability on phones and during screen recording/demo use.
+
+### 07 — Landing / download entry point
+
+A separate static landing page was prepared for Netlify with:
+
+- NeuroScope branding/logo
+- Project overview
+- Open-app CTA
+- Android APK download CTA
+- Project features and safety scope
+- Configurable links to the separate Vercel app and Google Drive APK
+
+This landing site is intentionally independent from the application backend.
 
 ---
 
-#### Update 5 — Wellness Profile personalization
+# 21. Governance, contribution & license
 
-After login, users can optionally provide physical and lifestyle context. The profile is stored locally and is only used when the user enables personalization.
+## Contribution guidelines
 
-| Profile context | How NeuroScope uses it |
-|---|---|
-| 🎂 **Age** | Helps tailor wording and relevant guidance |
-| 📏 **Height + Weight** | Produces a local BMI reference for the physical-wellness snapshot; it does **not** change mental-health scores |
-| 😴 **Sleep** | Can inform sleep/recovery guidance when relevant |
-| 🏃 **Movement / Exercise** | Can inform gentle activity suggestions |
-| ☕ **Caffeine** | Can inform sleep/restlessness guidance when relevant |
-| 🚭 **Nicotine / Alcohol** | Available as lifestyle context for relevant discussions |
-| 💊 **Medications / Physical notes** | Available to relevant AI guidance when personalization is enabled; not used to recommend dosage changes |
+1. Create a feature/fix branch from the current default branch.
+2. Keep safety-critical logic changes isolated and clearly documented.
+3. Do not commit `.env`, API keys, private certificates or keystores.
+4. Run at minimum:
 
-The wellness profile is passed into **assessment synthesis, dynamic solutions, follow-up chat, reassessment, per-dimension insights and the local/offline AI path** as context. It stays outside the core mental-health scoring/classifier path.
+```bash
+npm run lint
+npm run test:rules
+npm run build:web
+```
 
-📁 `CHANGELOG_PROFILE_PERSONALIZATION.md` · wellness-profile components/utilities in `src/`
+5. For Android changes, run:
 
----
+```bash
+npx cap sync android
+```
 
-#### Update 6 — Printable report + full chat export
+and record any native setup changes in a `CHANGELOG_*.md` file.
 
-The results flow now separates the printable document from the interactive dashboard.
+## Code style
 
-| Output | What changed |
-|---|---|
-| 🖨️ **Print / Save PDF** | Generates a standalone A4 report instead of printing the live dashboard/modal |
-| 📄 **Clean pagination** | Scores, recommendations, protocols, safety guidance and profile context get stable page-break behavior |
-| 💬 **Full chat download** | The user can download the assessment conversation, AI follow-up turns, results and opted-in profile context |
-| 🧍 **Profile in reports** | Physical/lifestyle context appears in the report when personalization is enabled |
+- TypeScript for application code.
+- Prefer small, focused utility functions.
+- Keep provider calls behind the server/API boundary.
+- Keep deterministic safety logic independent of model availability.
+- Treat user profile data as explicit, opt-in context.
+- Do not silently change the model/risk hierarchy when editing communication prompts.
 
-The existing on-screen report and Copy Text behavior remain unchanged.
+## License status
 
-📁 `CHANGELOG_PRINT_REPORT_FIX.md` · report/export logic in `src/`
+**No explicit open-source license was supplied in the project materials reviewed for this README.**
+Until a license file is added, do not assume third parties have permission to redistribute, modify or
+commercially use the repository.
 
----
-
-#### Update 7 — Mobile readability + contrast
-
-The mobile UI was given a final high-contrast typography layer so content remains readable across the white interface.
-
-- All primary app text uses **solid black (`#000000`)**.
-- Headings use **900-weight** typography.
-- Inputs, selects, textareas, labels, placeholders, buttons, tables and common text elements use the same black/bold treatment.
-- Remaining dark/transparent text treatments were overridden so questions, instructions and result content stay visible.
-- The contrast override is scoped to `.neuroscope-app` so the change is isolated to the app UI.
-
-📁 `CHANGELOG_FONT_CONTRAST.md` · mobile typography/contrast styles in `src/`
+Before public distribution, add the intended license (for example, MIT if that is the project's chosen
+policy) as a root-level `LICENSE` file and update this section accordingly.
 
 ---
 
-### 🧾 Summary of these updates
+# 22. References
 
-<details>
-<summary><b>⚙️ Configuration & scripts</b></summary>
+The project materials identify these core research references as informing screening/question design
+and evidence-grounded communication:
 
-| Item | Change |
-|---|---|
-| `LOCAL_LLM_PROFILE` | **New** in-code switch: `'fast'` (default) or `'quality'` |
-| `npm run test:rules` | **New** script — tone-rule and local-LLM ensemble tests |
-| `/sw.js` | **New** — generated at build time by `vite-plugin-sw.ts` (no new npm packages) |
-| `netlify.toml`, `vercel.json` | Updated so the service worker is never served from a stale HTTP cache |
-| `vite.config.ts` | `worker.format = 'es'` for the model workers |
-| `VITE_API_BASE_URL` | **New** mobile-build setting for pointing the APK at a dedicated Vercel backend |
-| Capacitor | **New** Android packaging/configuration for `com.neuroscope.app` |
-| Native auth/speech | **New** Android integrations for Google Sign-In and voice dictation |
+- Porges (2007) — *The Polyvagal Perspective*, Biological Psychology.
+- Pilkonis et al. (2011) — *PROMIS Emotional Distress Item Banks*, Assessment.
+- Gibbons et al. (2012) — *Computerized Adaptive Test for Depression*, Archives of General Psychiatry.
+- SAMHSA (2014) — *TIP 57, Trauma-Informed Care*.
 
-</details>
+The repository also contains a broader research/clinical reading corpus and the project psyche dataset.
+See `RESEARCH_GROUNDED_ADDITIONS.md` and `public/models/neuroscope-distilbert/MODEL_CARD.md` for the
+project-specific details supplied with the codebase.
 
-<details>
-<summary><b>📂 New files added</b></summary>
+---
 
-| Area | Files |
-|---|---|
-| Offline AI | `src/utils/localLlm.ts`, `src/utils/toneRules.ts`, `src/workers/localLlm.worker.ts`, `src/workers/localLlmProtocol.ts`, `src/components/OfflineModelMenu.tsx` |
-| Service worker | `src/sw/service-worker.js`, `vite-plugin-sw.ts`, `src/utils/registerServiceWorker.ts`, `public/manifest.webmanifest` |
-| Web Workers | `src/workers/semanticCore.ts`, `src/workers/semantic.worker.ts`, `src/workers/offlineFetchGuard.ts`, `src/utils/semanticTransport.ts` |
-| Tests | `scripts/test-tone-rules.ts`, `scripts/test-local-llm-ensemble.ts` |
-| Docs | `CHANGELOG_OFFLINE_PHI3.md`, `CHANGELOG_OFFLINE_CHAT.md`, `CHANGELOG_SERVICE_WORKER.md`, `CHANGELOG_WEB_WORKERS.md` |
-| Android | `capacitor.config.ts`, `ANDROID_NATIVE_AUTH_SETUP.md`, `src/components/QuestionCard.tsx`, `src/utils/googleAuth.ts` |
-| Personalization & reports | `CHANGELOG_PROFILE_PERSONALIZATION.md`, `CHANGELOG_PRINT_REPORT_FIX.md` |
-| Mobile UI | `CHANGELOG_FONT_CONTRAST.md` |
+## Quick command reference
 
-</details>
+```bash
+# Local web development
+npm install
+npm run dev
 
-<details>
-<summary><b>🗑️ Removed</b></summary>
+# Quality checks
+npm run lint
+npm run test:rules
 
-`HelixWaveEffect.tsx` overlay, `SpiralVortexEffect.tsx`, the twinkling-star and
-particle animations, and the old model smoke-test / retry-at-load path.
+# Web production build
+npm run build:web
 
-</details>
+# Capacitor / Android
+npx cap sync android
+npx cap open android
 
-<details>
-<summary><b>🛡️ Safety guarantees that did not change</b></summary>
-
-- Explicit crisis language still triggers a deterministic, code-level override before any
-  model or API is consulted.
-- The on-device AI is never used for critical-band / Suicidal readings or to write text
-  for severe / high / critical risk, and it can never talk a `severe` reading back down.
-- Web Workers fall back to the main thread if they fail, so nothing safety-related
-  depends on a worker being available.
-- `/api/*` is never intercepted by the service worker, so live AI and crisis logic are
-  unaffected by caching.
-
-</details>
-
-> 📄 Full details live in `CHANGELOG_OFFLINE_PHI3.md`, `CHANGELOG_OFFLINE_CHAT.md`, `CHANGELOG_SERVICE_WORKER.md` and `CHANGELOG_WEB_WORKERS.md` at the project root.
+# Windows debug APK
+cd android
+gradlew.bat assembleDebug
+```
 
 ---
 
 <div align="center">
 
-*Built with React, Vite, Express, ONNX Runtime, and a Groq/Gemini/local-LLM fallback
-chain that never leaves you without an answer.*
+### NeuroScope
+**From screening to understanding. From understanding to action.**
+
+Built with React, TypeScript, Vite, Transformers.js, ONNX Runtime, Express, Groq/Gemini fallbacks,
+Capacitor and native Android capabilities.
 
 </div>
