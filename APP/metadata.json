@@ -1,6 +1,0 @@
-{
-  "name": "NeuroScope - Mental Health Evaluator",
-  "description": "Interactive mental health assessment platform with animated neural synaptic visualizations, 20 clinical-depth screening questions, and AI-powered multi-dimensional evaluations via Gemini and Groq.",
-  "requestFramePermissions": ["microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
