@@ -369,6 +369,7 @@ The app provides an **Offline AI** model download. The documented profiles are:
 | Profile | Model | Approx. size | Intended use |
 |---|---|---:|---|
 | `fast` | Llama 3.2 1B q4f16 | ~1.3 GB | Faster local communication |
+| `quality` | Phi-3 mini | ~2.3 GB | Higher-quality local communication |
 
 The selected model is downloaded once and cached locally for reuse. It can support tone/chat/solution
 rewrites where the safety path permits it.
@@ -1006,7 +1007,17 @@ and record any native setup changes in a `CHANGELOG_*.md` file.
 - Keep deterministic safety logic independent of model availability.
 - Treat user profile data as explicit, opt-in context.
 - Do not silently change the model/risk hierarchy when editing communication prompts.
-  
+
+## License status
+
+**No explicit open-source license was supplied in the project materials reviewed for this README.**
+Until a license file is added, do not assume third parties have permission to redistribute, modify or
+commercially use the repository.
+
+Before public distribution, add the intended license (for example, MIT if that is the project's chosen
+policy) as a root-level `LICENSE` file and update this section accordingly.
+
+---
 
 # 22. References
 
