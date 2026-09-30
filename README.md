@@ -309,7 +309,7 @@ User answer
 
 # 7. Personalisation layer
 
-NeuroScope now supports an optional **Wellness Profile** collected after sign-in.
+NeuroScope App now supports an optional **Wellness Profile** collected after sign-in.
 
 ### Example fields
 
