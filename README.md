@@ -5,16 +5,6 @@
 
 **Adaptive free-text screening · Fine-tuned DistilBERT · Safety-aware actions · Offline AI · Web + Android**
 
-[![Status](https://img.shields.io/badge/status-MVP%20%2F%20hackathon-informational)](#maturity-status)
-[![Node](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](#prerequisites)
-[![React](https://img.shields.io/badge/react-19-61DAFB?logo=react&logoColor=111111)](#tech-stack)
-[![TypeScript](https://img.shields.io/badge/typescript-7-3178C6?logo=typescript&logoColor=white)](#tech-stack)
-[![Vite](https://img.shields.io/badge/vite-8-646CFF?logo=vite&logoColor=white)](#tech-stack)
-[![Capacitor](https://img.shields.io/badge/capacitor-8-119EFF?logo=capacitor&logoColor=white)](#android-app)
-[![CI](https://img.shields.io/badge/CI-not%20configured-lightgrey)](#testing--qa)
-[![Coverage](https://img.shields.io/badge/coverage-not%20instrumented-lightgrey)](#testing--qa)
-[![Code Quality](https://img.shields.io/badge/quality-TypeScript%20%2B%20lint-informational)](#testing--qa)
-
 A research-grounded, multilingual mental-wellness screening application that turns a short,
 conversational check-in into structured status/risk signals, personalised actions,
 interactive practices and a safety-aware follow-up path.
@@ -319,7 +309,7 @@ User answer
 
 # 7. Personalisation layer
 
-NeuroScope App now supports an optional **Wellness Profile** collected after sign-in.
+NeuroScope now supports an optional **Wellness Profile** collected after sign-in.
 
 ### Example fields
 
@@ -1079,3 +1069,4 @@ Built with React, TypeScript, Vite, Transformers.js, ONNX Runtime, Express, Groq
 Capacitor and native Android capabilities.
 
 </div>
+
