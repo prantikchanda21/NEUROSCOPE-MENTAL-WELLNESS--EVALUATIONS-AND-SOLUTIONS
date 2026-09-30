@@ -1,7 +1,7 @@
-# Offline Phi-3 mini (header dropdown) — governed by the NeuroScope / RoBERTa rules
+# Offline Llama 3.2 1B (header dropdown) — governed by the NeuroScope / RoBERTa rules
 
 ## What users see
-A small **Offline AI** dropdown in the header. "Download (about 2.3 GB)" fetches Phi-3 mini once;
+A small **Offline AI** dropdown in the header. "Download (about 1.3 GB)" fetches Llama 3.2 once;
 the browser caches it and it then runs on the user's own device, also without internet. Progress bar,
 "Remove from this device", and a plain "not available on this device" message when there is no WebGPU.
 On later visits it loads itself from the cache (about 4 s after start-up, so it never competes with the
@@ -35,9 +35,9 @@ Changed: `HeaderNav.tsx` (adds the dropdown), `semanticEngine.ts` (vote profiles
 (`npm run test:rules`).
 
 ## Model
-`microsoft/Phi-3-mini-4k-instruct-onnx-web`, dtype `q4f16`, WebGPU only (838 MB + 1.45 GB). Change
-`LOCAL_LLM_MODEL_ID` in `localLlm.ts` to use `onnx-community/Phi-3.5-mini-instruct-onnx-web` (the model in the
-official transformers.js demo) if the Phi-3 build fails to load in your setup.
+`microsoft/Llama 3.2 1B-4k-instruct-onnx-web`, dtype `q4f16`, WebGPU only (838 MB + 1.45 GB). Change
+`LOCAL_LLM_MODEL_ID` in `localLlm.ts` to use `onnx-community/Llama 3.2 1B-instruct-onnx-web` (the model in the
+official transformers.js demo) if the Llama 3.2 1B build fails to load in your setup.
 
 ## Limits
 - Desktop Chrome/Edge with WebGPU and ≥4 GB memory. Phones, Safari and most Firefox builds show "not available".
