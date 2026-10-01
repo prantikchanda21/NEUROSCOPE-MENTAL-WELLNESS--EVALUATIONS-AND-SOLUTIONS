@@ -3,6 +3,15 @@
 # 🧠 NeuroScope
 ### Mental Wellness Evaluation & Solution
 
+<p>
+  <img src="docs/screenshots/neuroscope-landing.png" width="48%" alt="NeuroScope landing page">
+  <img src="docs/screenshots/neuroscope-app.png" width="48%" alt="NeuroScope web application">
+</p>
+
+<p>
+  <img src="docs/screenshots/neuroscope-mobile.png" width="30%" alt="NeuroScope Android mobile application">
+</p>
+
 **Adaptive free-text screening · Fine-tuned DistilBERT · Safety-aware actions · Offline AI · Web + Android**
 
 A research-grounded, multilingual mental-wellness screening application that turns a short,
@@ -56,9 +65,9 @@ answers require immediate and explicit safety support.
 
 NeuroScope uses a **50-item adaptive free-text question pool** across five wellbeing areas.
 Users can answer in their own words or by voice. A fine-tuned **DistilBERT primary classifier**
-provides status/risk signals; RoBERTa, emotion/semantic models and bounded Groq tone analysis
-add supporting context. A deterministic risk engine controls safety-critical behavior, while
-Groq/Gemini are used downstream for communication and evidence-grounded explanation.
+provides status/risk signals; RoBERTa and local emotion/semantic models add supporting context.
+A deterministic risk engine controls safety-critical behavior, while Groq/Gemini are used only
+downstream for communication and evidence-grounded explanation.
 
 The same product is available as a responsive web experience and an Android app packaged with
 Capacitor. The Android build adds native Google Sign-In and native speech recognition rather than
@@ -253,7 +262,6 @@ DistilBERT          → primary status + risk
 RoBERTa             → sentiment / tone support
 Emotion model       → affective signal
 MiniLM              → semantic relevance
-Groq tone analysis  → bounded contextual tone signal
 Lexicon / TF overlap→ deterministic fallbacks
 ```
 
@@ -718,7 +726,7 @@ Groq tone pool
   GROQ_1 → GROQ_2 → Gemini
 
 Communication pool
-  GROQ_3 → GROQ_4 → Gemini → local Phi fallback → template/local fallback
+  GROQ_3 → GROQ_4 → Gemini → local Llama fallback → template/local fallback
 ```
 
 Provider errors and rate limits are handled by the fallback chain where a route permits fallback.
